@@ -1,0 +1,1874 @@
+\documentclass[red]{beamer}
+
+\usepackage{mathtools}
+\makeatletter
+\newcommand{\explain}[2]{\underset{\mathclap{\overset{\uparrow}{#2}}}{#1}}
+\newcommand{\explainup}[2]{\overset{\mathclap{\underset{\downarrow}{#2}}}{#1}}
+\makeatother
+
+
+\usetheme{Antibes}
+\usecolortheme{lily}
+
+%\usepackage{gb4e}
+
+%\usepackage{color}
+
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+
+%\fvset{frame=single,framesep=1mm,fontfamily=courier,fontsize=\scriptsize,numbers=left,framerule=.3mm,numbersep=1mm,commandchars=\\\{\}}
+
+
+
+\usepackage[english]{babel}
+%\usepackage[latin1]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+
+\usepackage{mathptmx}
+\usepackage{amsthm}
+
+\usepackage{esint}
+
+
+
+
+
+\setbeamercovered{transparent}
+
+
+\title{Lecture 2: Statistical methods for linguistic research: Advanced Tools}
+\author{Shravan Vasishth}
+\institute{Department of Linguistics\\
+University of Potsdam, Germany}
+
+\setbeamerfont{page number in head/foot}{size=\large}
+\setbeamertemplate{footline}[frame number]
+
+
+\begin{document}
+
+
+<<setup,include=FALSE,cache=FALSE>>=
+library(knitr)
+library(coda)
+
+# set global chunk options, put figures into folder
+options(replace.assign=TRUE,show.signif.stars=FALSE)
+opts_chunk$set(fig.path='figures/figure-', fig.align='center', fig.show='hold')
+options(replace.assign=TRUE,width=75)
+opts_chunk$set(dev='postscript')
+@
+
+
+
+\frame{\titlepage}
+
+\section{Introduction}
+
+\begin{frame}\frametitle{Today's goals}
+
+In this second lecture, my goals are to 
+
+\begin{enumerate}
+\item
+Give you a feeling for how Bayesian analysis works using two simple examples that need only basic mathematical operations (addition, subtraction, division, multiplication). 
+\item 
+Start thinking about priors for parameters in preparation for fitting linear mixed models.
+\item
+Start fitting linear regression models in JAGS.
+\end{enumerate}
+
+I will assign some homework which is designed to help you understand these concepts. Solutions will be discussed next week.
+
+\end{frame}
+
+\section{Some preliminaries: Probability distributions}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+
+A random variable $X$ is a function $X : S \rightarrow \mathbb{R}$ that associates with each outcome $\omega \in S$ exactly one number $X(\omega) = x$.
+
+$S_X$ is all the $x$'s (all the possible values of X, the support of X). I.e., $x \in S_X$. 
+
+Good example: number of coin tosses till H
+
+\begin{itemize}
+  \item $X: \omega \rightarrow x$
+  \item $\omega$: H, TH, TTH,\dots (infinite)
+	\item $x=0,1,2,\dots; x \in S_X$
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+
+
+Every discrete (continuous) random variable X has associated with it a \textbf{probability mass (distribution)  function (pmf, pdf)}. 
+
+PMF is used for discrete distributions and PDF for continuous.
+
+\begin{equation}
+p_X : S_X \rightarrow [0, 1] 
+\end{equation}
+
+defined by
+
+\begin{equation}
+p_X(x) = P(X(\omega) = x), x \in S_X
+ \end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+
+Probability density functions (continuous case) or probability mass functions (discrete case) are functions that assign probabilities or relative frequencies to all events in a sample space.
+
+I will use the convention that the expression 
+
+\begin{equation}
+ X \sim f(\cdot)
+\end{equation}
+
+\noindent
+means that the random variable $X$ has pdf/pmf $f(\cdot)$.
+For example, if we say that $X\sim Normal(\mu,\sigma^2)$, we are assuming that the pdf is
+
+\begin{equation}
+f(x)= \frac{1}{\sqrt{2\pi \sigma^2}} \exp[-\frac{(x-\mu)^2}{2\sigma^2}]
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+
+We also need a \textbf{cumulative distribution function} or cdf because, in the continuous case, P(X=some point value) is zero and we therefore need a way to talk about P(X in a specific range). cdfs serve that purpose.
+
+In the continuous case, the cdf or distribution function is defined as: 
+
+\begin{equation}
+P(x<k) = F(x<k) = \hbox{The area under the curve to the left of k}
+\end{equation}
+
+For example, suppose $X\sim Normal(600,50)$.  
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+\small
+We can ask for $Prob(X<600)$:
+<<>>=
+pnorm(600,mean=600,sd=sqrt(50))
+@
+
+We can ask for the quantile that has 50\% of the probability to the left of it:
+
+<<>>=
+qnorm(0.5,mean=600,sd=sqrt(50))
+@
+
+\dots or to the right of it:
+
+<<>>=
+qnorm(0.5,mean=600,sd=sqrt(50),lower.tail=FALSE)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+
+We can also calculate the probability that X lies
+between 590 and 610: $Prob(590<X<610)$:
+
+<<>>=
+pnorm(610,mean=600,sd=sqrt(50))-pnorm(490,mean=600,sd=sqrt(50))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+
+Another way to compute the area under the curve is by simulation:
+
+<<>>=
+x<-rnorm(10000,mean=600,sd=sqrt(50))
+## proportion of cases where 
+## x is less than 500:
+mean(x<590)
+## theoretical value:
+pnorm(590,mean=600,sd=sqrt(50))
+@
+
+We will be doing this a lot.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Random variables}
+
+E.g., in linguistics we take as continous random variables: 
+
+\begin{enumerate}
+\item reading time: Here the random variable (RV) X has possible values $\omega$ ranging from 0 ms to 
+some upper bound b ms (or maybe unbounded?), and the RV X maps each possible value $\omega$ to the corresponding number (0 to 0 ms, 1 to 1 ms, etc.). 
+\item acceptability ratings  (technically not correct; but people generally treat ratings as continuous, at least in psycholinguistics)
+\item EEG signals: measured in microvolts.
+\end{enumerate}
+
+In this course, due to time constraints, we will focus almost exclusively on reading time data (eye-tracking and self-paced reading).
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Normal random variables}
+
+We will also focus mostly on the normal distribution.
+
+\begin{equation}
+f_{X}(x)=\frac{1}{\sigma\sqrt{2\pi}}e^{ \frac{-(x-\mu)^{2}}{2\sigma^{2}}},\quad -\infty < x < \infty.
+\end{equation}
+
+It is conventional to write $X\sim N(\mu,\sigma^2)$.
+
+Important note: The normal distribution is represented differently in different probabilistic programming languages:
+
+\begin{enumerate}
+\item R: \texttt{dnorm(mean,sigma)}
+\item JAGS: \texttt{dnorm(mean,precision)} where precision~=~1/variance
+\item Stan: \texttt{normal(mean,sigma)}
+\end{enumerate}
+
+Please be careful about this.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Normal random variables}
+
+
+<<echo=FALSE,fig.height=4>>=
+plot(function(x) dnorm(x), -6, 6,
+      main = "Normal density N(0,1)",ylim=c(0,.4),
+              ylab="density",xlab="X")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Normal random variables}
+
+
+%If $X$ is normally distributed with parameters $\mu$ and $\sigma^2$, then $Y=aX+b$ is normally distributed with parameters $a\mu + b$ and $a^2\sigma^2$.
+
+\textbf{Standard or unit normal random variable:} 
+
+If $X$ is normally distributed with parameters $\mu$ and $\sigma^2$, then $Z=(X-\mu)/\sigma$ is normally distributed with parameters $0,1$.
+
+We conventionally write $\Phi (x)$ for the CDF:
+
+\begin{equation}
+\Phi (x)=\frac{1}{\sqrt{2\pi}} \int_{-\infty}^{x}  e^{\frac{-y^2}{2}} \, dy 
+\quad \textrm{where}~y=(x-\mu)/\sigma
+\end{equation}
+
+In R, we can type \texttt{pnorm(x)}, to find out $\Phi (x)$. Suppose $x=-2$:
+
+<<>>=
+pnorm(-2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Normal random variables}
+
+
+If $Z$ is a standard normal random variable (SNRV) then
+
+\begin{equation}
+p\{ Z\leq -x\} = p\{Z>x\}, \quad -\infty < x < \infty
+\end{equation}
+
+We can check this with R:
+<<>>=
+##P(Z < -x):
+pnorm(-2)
+##P(Z > x):
+pnorm(2,lower.tail=FALSE)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Normal random variables}
+
+Although the following expression looks scary:
+
+\begin{equation}
+\Phi (x)=\frac{1}{\sqrt{2\pi}} \int_{-\infty}^{x}  e^{\frac{-y^2}{2}} \, dy 
+\quad \textrm{where}~y=(x-\mu)/\sigma
+\end{equation}
+
+all it is saying is ``find the area under the normal curve, ranging - Infinity to x. Always visualize! $\Phi(-2)$:
+
+<<echo=FALSE,fig.height=4>>=
+## code source: http://www.r-bloggers.com/creating-shaded-areas-in-r/
+coord.x <- c(-3,seq(-3,-2,0.01),-2) 
+ coord.y <- c(0,dnorm(seq(-3,-2,0.01)),0) 
+ curve(dnorm(x,0,1),xlim=c(-3,3),main='Standard Normal') 
+ polygon(coord.x,coord.y,col='skyblue')
+text(x=-2.5,y=0.1,label=expression(phi(-2)))
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Normal random variables}
+
+Since $Z=((X-\mu)/\sigma)$ is an SNRV whenever $X$ is normally distributed with parameters $\mu$ and $\sigma^2$, then the CDF of $X$ can be expressed as:
+
+\begin{equation}
+F_X(a) = P\{ X\leq a \} = P\left( \frac{X - \mu}{\sigma} \leq \frac{a - \mu}{\sigma}\right) = \Phi\left( \frac{a - \mu}{\sigma} \right)
+\end{equation}
+
+\small
+\textbf{Practical application}: Suppose you know that $X\sim N(\mu,\sigma^2)$, and you know $\mu$ but not $\sigma$. If you know that a 95\% confidence interval is [-q,+q], then you can work out $\sigma$ by 
+
+\begin{enumerate}
+\item[a.] computing the $Z \sim N(0,1)$ that has 2.5\% of the area to its right:
+
+<<>>=
+round(qnorm(0.025,lower.tail=FALSE),digits=2)
+@
+\item
+[b.] Solve for $\sigma$ in $Z=\frac{q-\mu}{\sigma}$. 
+\end{enumerate}
+
+We will use this fact in Homework 0.\label{hw0hint}
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Normal random variables}
+
+
+Summary of useful commands:
+
+\begin{verbatim}
+## pdf of normal:
+dnorm(x, mean = 0, sd = 1)
+## compute area under the curve:
+pnorm(q, mean = 0, sd = 1)
+## find out the quantile that has 
+## area (probability) p under the curve:
+qnorm(p, mean = 0, sd = 1)
+## generate normally distributed data of size n:
+rnorm(n, mean = 0, sd = 1)
+\end{verbatim}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Likelihood function (Normal distribution)}
+
+Let's assume that we have generated a data point from a particular normal distribution:
+
+$x\sim N(\mu=600,\sigma^2=50)$.
+
+<<>>=
+x<-rnorm(1,mean=600,sd=sqrt(50))
+@
+
+Given x, and different values of $\mu$, we can determine which $\mu$ is most likely to have generated x. You can eyeball the result:
+
+<<echo=FALSE,fig.height=3>>=
+mu<-seq(400,800,by=0.1)
+plot(mu,dnorm(x,mean=mu,sd=sqrt(50)),type="l")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Likelihood function}
+
+Suppose that we had generated \textbf{10} \textit{independent} values of x:
+
+<<>>=
+x<-rnorm(10,mean=600,sd=sqrt(50))
+@
+
+We can plot the likelihood of \textit{each} of the x's that the mean of the Normal distribution that generated the data is $\mu$, for different values of $\mu$:
+
+<<>>=
+## mu = 500
+dnorm(x,mean=500,sd=sqrt(50))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Likelihood function}
+
+
+Since each of the x's are independently generated, the total likelihood of the 10 x's is:
+
+\begin{equation}
+f(x_1)\times f(x_2) \times \dots \times f(x_10)
+\end{equation}
+
+for some $\mu$ in $f(\cdot)=Normal(\mu,50)$.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Likelihood function}
+
+
+It's computationally easier to just take logs and sum them up (\textbf{log likelihood}):
+
+\begin{equation}
+\log f(x_1)+ \log f(x_2) \times \dots \times \log f(x_10)
+\end{equation}
+
+<<>>=
+## mu = 500
+sum(dnorm(x,mean=500,sd=sqrt(50),log=TRUE))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{(Log) likelihood function}
+
+We can now plot, for different values of $\mu$, the likelihood that each of the $\mu$ generated the 10 data points:
+
+<<fig.height=3>>=
+mu<-seq(400,800,by=0.1)
+liks<-rep(NA,length(mu))
+for(i in 1:length(mu)){
+liks[i]<-sum(dnorm(x,mean=mu[i],sd=sqrt(50),log=TRUE))
+}
+plot(mu,liks,type="l")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{(Log) likelihood function}
+
+\begin{enumerate}
+\item
+It's intuitively clear that we'd probably want to declare the value of $\mu$ that brings us to the ``highest'' point in this figure.
+\item
+This is the \textbf{maximum likelihood estimate}, MLE.
+\item
+\textbf{Practical implication}: In frequentist statistics,  our data vector x is assumed to be $X\sim N(\mu,\sigma^2)$, and we attempt to figure out the MLE, i.e., the estimates of $\mu$ and $\sigma^2$ that would maximize the likelihood. 
+\item
+In Bayesian models, when we assume a uniform prior, we will get an estimate of the parameters which coincides with the MLE (examples coming soon).
+\end{enumerate}
+
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Bayesian modeling examples}
+
+Next, I will work through five relatively simple examples that use Bayes' Theorem.
+
+\begin{enumerate}
+\item Example 1: Proportions
+\item Example 2: Normal distribution
+\item Example 3: Linear regression with one predictor
+\item Example 4: Linear regression with multiple predictors
+\item Example 5: Generalized linear models example (binomial link).
+\end{enumerate}
+
+\end{frame}
+
+\section{Example 1: Proportions}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+
+\begin{enumerate}
+\item
+Recall the binomial distribution:
+Let X: no.\ successes in $n$ trials. We generally assume that 
+
+$X\sim Binomial(n,\theta)$, $\theta$ unknown.
+
+\item
+Suppose we have 46 successes out of 100. We generally use the empirically observed proportion 46/100 as our estimate of $\theta$. I.e., we assume that the \textbf{generating distribution} is
+
+$X\sim Binomial(n=100,\theta=.46)$.
+
+\item
+This is because, for all possible values of $\theta$, going from 0 to 1, $0.46$ has the highest likelihood.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+<<>>=
+dbinom(x=46,size=100,0.4)
+dbinom(x=46,size=100,0.46)
+dbinom(x=46,size=100,0.5)
+dbinom(x=46,size=100,0.6)
+@
+
+%Actually, we could take a whole range of values of $\theta$ from 0 to 1 and plot the resulting probabilities.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+<<echo=FALSE,fig.height=3>>=
+theta<-seq(0,1,by=0.01)
+plot(theta,dbinom(x=46,size=100,theta),
+     xlab=expression(theta),type="l")
+@
+
+This is the \textbf{likelihood function} for the binomial distribution, and we will write it as 
+$f(data\mid \theta)$. It is a function of $\theta$.
+
+\end{frame}
+
+\begin{frame}\frametitle{Proportions}
+
+Since $Binomial(x,n,\theta) = {n \choose x} \theta^x \theta^{n-x}$, we can see that:
+
+\begin{equation}
+f(\hbox{data}\mid \theta) \propto \theta^{46} (1-\theta)^{54}
+\end{equation}
+
+We are now going to use Bayes' theorem to work out the posterior distribution of $\theta$ given the data:
+
+\begin{equation}
+\explain{f(\theta\mid \hbox{data})}{posterior} \propto \explain{f(\hbox{data}\mid \theta)}{likelihood} \explain{f(\theta)}{prior}
+\end{equation}
+
+All that's missing here is the prior distribution $f(\theta)$. So let's try to define a prior for $\theta$.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+
+To define a prior for $\theta$, we will use a distribution called the Beta distribution, which takes two parameters, a and b. 
+
+We can plot some Beta distributions to get a feel for what these parameters do.
+
+We are going to plot
+
+\begin{enumerate}
+\item 
+Beta(a=2,b=2)
+\item 
+Beta(a=3,b=3)
+\item 
+Beta(a=6,b=6)
+\item
+Beta(a=10,b=10)
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}\frametitle{Proportions}
+
+<<betas,echo=FALSE,fig.height=4>>=
+plot(function(x) 
+  dbeta(x,shape1=2,shape2=2), 0,1,
+      main = "Beta density",
+              ylab="density",xlab="X",ylim=c(0,4))
+
+text(.5,1.3,"a=2,b=2")
+
+plot(function(x) 
+  dbeta(x,shape1=3,shape2=3),0,1,add=T)
+text(.5,1.8,"a=3,b=3")
+
+
+plot(function(x) 
+  dbeta(x,shape1=6,shape2=6),0,1,add=T)
+text(.5,2.6,"a=6,b=6")
+
+plot(function(x) 
+  dbeta(x,shape1=10,shape2=10),0,1,add=T)
+text(.5,3.5,"a=60,b=60")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+
+Each successive density expresses increasing certainty about $\theta$ being centered around 0.5; notice that the spread about 0.5 is decreasing as a and b increase.
+
+\begin{enumerate}
+\item 
+Beta(a=2,b=2)
+\item 
+Beta(a=3,b=3)
+\item 
+Beta(a=6,b=6)
+\item
+Beta(a=10,b=10)
+\end{enumerate}
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Proportions}
+
+\begin{enumerate}
+\item
+If we don't have much prior information, we could use a=b=2; this gives us a uniform prior; we will call this a vague prior. 
+\item
+If we have a lot of prior knowledge and/or a strong belief that $\theta$ has a particular value, we can use a larger a,b to reflect our greater certainty about the parameter. 
+\item
+You can think of the parameter referring to the number of successes, and the parameter b to the number of failures. 
+\end{enumerate}
+
+So the beta distribution can be used to define the prior distribution of $\theta$.
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Proportions}
+
+Just for the sake of illustration, let's take four different beta priors, each reflecting increasing certainty. 
+
+\begin{enumerate}
+\item 
+Beta(a=2,b=2)
+\item
+Beta(a=3,b=3)
+\item 
+Beta(a=6,b=6)
+\item
+Beta(a=21,b=21)
+\end{enumerate}
+
+Each reflects a belief that $\theta=0.5$, with varying degrees of uncertainty. 
+
+Note an important fact: $Beta(\theta \mid a,b) \propto \theta^{a-1}(1-\theta)^{b-1}$. 
+
+\medskip
+This is because the Beta distribution is:
+
+$f(\theta \mid a,b) = \frac{\Gamma(a,b)}{\Gamma(a)\Gamma(b)}\theta^{a-1} (1-\theta)^{b-1}$
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Proportions}
+Now we just need to plug in the likelihood and the prior to get the posterior:
+
+\begin{equation}
+f(\theta\mid \hbox{data}) \propto f(\hbox{data}\mid \theta) f(\theta)
+\end{equation}
+
+The four corresponding posterior distributions would be as follows (I hope I got the sums right!).
+
+\end{frame}
+
+\begin{frame}\frametitle{Proportions}
+
+\begin{equation}
+f(\theta\mid \hbox{data}) \propto [\theta^{46} (1-\theta)^{54}] [\theta^{2-1}(1-\theta)^{2-1}] = \theta^{47} (1-\theta)^{55}
+\end{equation}
+
+\begin{equation}
+f(\theta\mid \hbox{data}) \propto [\theta^{46} (1-\theta)^{54}] [\theta^{3-1}(1-\theta)^{3-1}] = \theta^{48} (1-\theta)^{56}
+\end{equation}
+
+\begin{equation}
+f(\theta\mid \hbox{data}) \propto [\theta^{46} (1-\theta)^{54}] [\theta^{6-1}(1-\theta)^{6-1}] = \theta^{51} (1-\theta)^{59}
+\end{equation}
+
+\begin{equation}
+f(\theta\mid \hbox{data}) \propto [\theta^{46} (1-\theta)^{54}] [\theta^{21-1}(1-\theta)^{21-1}] = \theta^{66} (1-\theta)^{74}
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+
+\begin{enumerate}
+\item
+We can now visualize each of these triplets of priors, likelihoods and posteriors. 
+\item
+Note that I use the beta to model the likelihood because this allows me to visualize all three (prior, lik., posterior) in the same plot. 
+\item
+I first show the plot just for the prior
+
+$\theta \sim Beta(a=2,a=2)$
+
+\end{enumerate}
+
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+\framesubtitle{Beta(2,2) prior: posterior is shifted just a bit to the right compared to the likelihood}
+
+%First case:
+<<echo=F,fig.height=5>>=
+##lik:
+plot(function(x) 
+  dbeta(x,shape1=46,shape2=54),0,1,
+              ylab="",xlab="X",col="red",
+  ylim=c(0,10))
+
+## prior:
+plot(function(x) 
+  dbeta(x,shape1=2,shape2=2), 0,1,
+      main = "Prior",
+              ylab="density",xlab="X",add=T,lty=2)
+
+## posterior
+plot(function(x) 
+  dbeta(x,shape1=48,shape2=56), 0,1,
+      main = "Posterior",
+              ylab="density",xlab="X",add=T)
+
+legend(0.1,6,legend=c("post","lik","prior"),
+       lty=c(1,1,2),col=c("black","red","black"))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+\framesubtitle{Beta(6,6) prior: Posterior shifts even more towards the prior}
+
+%First case:
+<<echo=F,fig.height=5>>=
+##lik:
+plot(function(x) 
+  dbeta(x,shape1=46,shape2=54),0,1,
+              ylab="",xlab="X",col="red",
+  ylim=c(0,10))
+
+## prior:
+plot(function(x) 
+  dbeta(x,shape1=6,shape2=6), 0,1,
+      main = "Prior",
+              ylab="density",xlab="X",add=T,lty=2)
+
+## posterior
+plot(function(x) 
+  dbeta(x,shape1=52,shape2=60), 0,1,
+      main = "Posterior",
+              ylab="density",xlab="X",add=T)
+
+legend(0.1,6,legend=c("post","lik","prior"),
+       lty=c(1,1,2),col=c("black","red","black"))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Proportions}
+\framesubtitle{Beta(21,21) prior: Posterior shifts \textit{even} more towards the prior}
+
+%First case:
+<<echo=F,fig.height=5>>=
+##lik:
+plot(function(x) 
+  dbeta(x,shape1=46,shape2=54),0,1,
+              ylab="",xlab="X",col="red",
+  ylim=c(0,10))
+
+## prior:
+plot(function(x) 
+  dbeta(x,shape1=21,shape2=21), 0,1,
+      main = "Prior",
+              ylab="density",xlab="X",add=T,lty=2)
+
+## posterior
+plot(function(x) 
+  dbeta(x,shape1=67,shape2=75), 0,1,
+      main = "Posterior",
+              ylab="density",xlab="X",add=T)
+
+legend(0.1,6,legend=c("post","lik","prior"),
+       lty=c(1,1,2),col=c("black","red","black"))
+@
+
+\end{frame}
+
+\begin{frame}\frametitle{Proportions}
+
+In essence, the posterior is a compromise between the prior and the likelihood.
+
+\begin{enumerate}
+\item
+When the prior has high uncertainty or we have a lot of data, the likelihood will dominate.
+\item When the prior has high certainty (like the Beta(21,21) case),  then the prior will dominate, unless there is enough data for the likelihood to dominate.
+\end{enumerate}
+
+So, Bayesian methods are particularly important when you have little data but a whole lot of expert knowledge.
+
+But they are also useful for standard psycholinguistic research, as I hope to demonstrate.
+
+
+\end{frame}
+
+\begin{frame}\frametitle{An example application}
+
+\small
+``The French mathematician Pierre-Simon Laplace (1749-1827) was the first person to show definitively that the proportion of female births in the French population was less then $0.5$, in the late 18th century, using a Bayesian analysis based on a uniform prior distribution. Suppose you were doing a similar analysis but you had more definite prior beliefs about the ratio of male to female births. In particular, if $\theta$ represents the proportion of female births in a given population, you are willing to place a Beta(100,100) prior distribution on $\theta$.
+
+\begin{enumerate}
+\item
+Show that this means you are more than 95\% sure that $\theta$ is between $0.4$ and $0.6$, although you are ambivalent as to whether it is greater or less than $0.5$.
+\item Now you observe that out of a random sample of $1,000$ births, $511$ are boys. What is your posterior probability that $\theta> 0.5$?''
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{An example application}
+
+\textit{Show that this means you are more than 95\% sure that $\theta$ is between $0.4$ and $0.6$, although you are ambivalent as to whether it is greater or less than $0.5$.}
+
+Prior: Beta(a=100,b=100)
+
+<<>>=
+round(qbeta(0.025,shape1=100,shape2=100),digits=1)
+round(qbeta(0.975,shape1=100,shape2=100),digits=1)
+## ambivalent as to whether theta <0.5 or not:
+round(pbeta(0.5,shape1=100,shape2=100),digits=1)
+@
+
+[Exercise: Draw the prior distribution]
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{An example application}
+
+\textit{Now you observe that out of a random sample of $1,000$ births, $511$ are boys. What is your posterior probability that $\theta> 0.5$?}
+
+Prior: Beta(a=100,b=100)
+
+Data: 489 girls out of 1000.
+
+Posterior: 
+
+\begin{equation}
+f(\theta\mid \hbox{data}) \propto [\theta^{489} (1-\theta)^{511}] [\theta^{100-1}(1-\theta)^{100-1}] = \theta^{588} (1-\theta)^{610}
+\end{equation}
+
+Since $Beta(\theta \mid a,b) \propto \theta^{a-1}(1-\theta)^{b-1}$, the posterior is
+Beta(a=589,b=611).
+
+Therefore the posterior probability of $\theta>0.5$ is:
+
+<<>>=
+qbeta(0.5,shape1=589,shape2=611,lower.tail=FALSE)
+@
+
+\end{frame}
+
+
+\section{Example 2: Normal distribution}
+
+\begin{frame}\frametitle{Normal distribution}
+
+The normal distribution is the most frequently used probability model in psychology and linguistics.
+
+If $\bar{x}$ is sample mean, sample size is $n$ and sample variance is known to be $\sigma^2$, and if the prior on the mean $\mu$ is $Normal(m,v)$, then:
+
+It is pretty easy to derive (see Lynch textbook) the posterior mean $m^*$ and variance $v^*$ analytically:
+
+\begin{equation}
+v^*=\frac{1}{\frac{1}{v}+ \frac{n}{\sigma^2}} 
+\quad
+m^*= v^* \left( \frac{m}{v} + \frac{n\bar{x}}{\sigma^2} \right)
+\end{equation}
+
+\begin{equation}
+E[\theta\mid x] = m\times \frac{w1}{w1+w2} + \bar{x} \times \frac{w2}{w1+w2} \quad 
+w_1 = v^{-1}, w_2=(\sigma^2/n)^{-1}
+\end{equation}
+
+So: the posterior mean is a \textbf{weighted mean} of the prior and likelihood.
+
+\end{frame}
+
+\begin{frame}\frametitle{Normal distribution}
+
+\begin{enumerate}
+\item
+The weight w1 is determined by the inverse of the prior variance. 
+\item
+The weight w2 is determined by the inverse of the sample standard error. 
+\item 
+It is common in Bayesian statistics to talk about $precision=\frac{1}{variance}$, so that
+\begin{enumerate}
+\item 
+$w_1=v^{-1}=precision_{prior}$
+\item
+$w_2=(\sigma^2/n)^{-1}=precision_{data}$
+\end{enumerate}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}\frametitle{Normal distribution}
+
+If w1 is very large compared to w2, then the posterior mean will be determined mainly by the prior mean m:
+
+\begin{equation}
+E[\theta\mid x] = m\times \frac{\mathbf{w1}}{\mathbf{w1}+w2} + \bar{x} \times \frac{w2}{\mathbf{w1}+w2} \quad 
+w_1 = v^{-1}, w_2=(\sigma^2/n)^{-1}
+\end{equation}
+
+If w2 is very large compared to w1, then the posterior mean will be determined mainly by the sample mean $\bar{x}$:
+
+\begin{equation}
+E[\theta\mid x] = m\times \frac{w1}{w1+\mathbf{w2}} + \bar{x} \times \frac{\mathbf{w2}}{w1+\mathbf{w2}} \quad 
+w_1 = v^{-1}, w_2=(\sigma^2/n)^{-1}
+\end{equation}
+
+\end{frame}
+
+
+\begin{frame}\frametitle{An example application}
+
+Let's say there is a hormone measurement test that yields a numerical value that can be positive or negative. We know the following:
+
+\begin{itemize}
+\item The doctor's prior: 75\%  interval (``patient healthy'') is [-0.3,0.3].
+\item Data from patient: $x=0.2$, known $\sigma=0.15$.
+\end{itemize}
+
+Compute posterior N(m*,v*).
+
+I'll leave this as Homework 0 (solution next week). Hint: see slide~\pageref{hw0hint}.
+
+\end{frame}
+
+\section{Example 3: Linear regression}
+
+\begin{frame}[fragile]\frametitle{Simple linear regression}
+
+We begin with a simple example.  Let the response variable be $y_i, i=1,\dots, n$, and let there be $p$ predictors, $x_{1i},\dots, x_{pi}$. Also, let
+
+\begin{equation}
+y_i \sim N(\mu_i, \sigma^2), \quad \mu_i = \beta_0 + \sum \beta x_{ki}
+\end{equation}
+
+(the summation is over the p predictors, i.e., $k=1,\dots, p$). 
+
+We need to specify a prior distribution for the parameters:
+
+\begin{equation}
+\beta_k \sim Normal(0,100^2)\quad \log \sigma \sim Unif(-100,100)
+\end{equation}
+
+\end{frame}
+
+\subsection{Fitting simple regression models in JAGS}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+\framesubtitle{Source: Gelman and Hill 2007}
+<<>>=
+beautydata<-read.table("data/beauty.txt",header=T)
+## Note: beauty level is centered.
+head(beautydata)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+
+<<>>=
+## restate the data as a list for JAGS:
+data<-list(x=beautydata$beauty,
+           y=beautydata$evaluation)
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+\framesubtitle{JAGS model}
+
+We literally follow the specification of the linear model given above. We specify the model for the data frame row by row, using a for loop, so that for each dependent variable value $y_i$ (the evaluation score) we specify how we believe it was generated.
+
+\begin{equation}
+y_i \sim Normal(\mu[i],\sigma^2) \quad i=1,\dots,463
+\end{equation}
+
+\begin{equation}
+\mu[i] \sim \beta_0 + \beta_1  x_i \quad \hbox{Note: predictor is centered}
+\end{equation}
+
+Define priors on the $\beta$ and on $\sigma$:
+
+\begin{equation}
+\beta_0 \sim Uniform(-10,10) \quad \beta_1 \sim Uniform(-10,10)
+\end{equation}
+
+\begin{equation}
+\sigma \sim Uniform(0,100)
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+Load rjags library:
+
+<<>>=
+library(rjags)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+
+<<>>=
+cat("
+model
+   {
+    ## specify model for data:
+    for(i in 1:463){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + beta1 * (x[i])
+    }
+    # priors:
+    beta0 ~ dunif(-10,10)
+    beta1 ~ dunif(-10,10)
+    sigma ~ dunif(0,100)
+    sigma2 <- pow(sigma,2)
+    tau <- 1/sigma2
+   }",
+     file="JAGSmodels/beautyexample1.jag" )
+@
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+\framesubtitle{Data from Gelman and Hill, 2007}
+
+Some things to note in JAGS syntax:
+
+\begin{enumerate}
+\item The normal distribution is defined in terms of precision, not variance.
+\item $\sim$ can be read as ``is generated or modeled by''
+\item %\texttt{$<$-}
+\begin{verbatim}
+<-
+\end{verbatim}
+is a deterministic assignment, like $=$ in mathematics.
+\item The model specification is declarative, order does not matter. For example, we would have written the following in any order:
+\begin{verbatim}
+    sigma ~ dunif(0,100)
+    sigma2 <- pow(sigma,2)
+    tau <- 1/sigma2
+\end{verbatim}
+\end{enumerate}
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+\small
+<<cache=TRUE>>=
+## specify which variables you want to examine
+## the posterior distribution of:
+track.variables<-c("beta0","beta1","sigma")
+
+## define model:
+beauty.mod <- jags.model( 
+  file = "JAGSmodels/beautyexample1.jag",
+                     data=data,
+                     n.chains = 2,
+                     n.adapt =2000, 
+                     quiet=T)
+
+## sample from posterior:
+beauty.res <- coda.samples(beauty.mod,
+                          var = track.variables,
+                          n.iter = 2000,
+                          thin = 1 ) 
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+
+<<>>=
+round(summary(beauty.res)$statistics[,1:2],digits=2)
+round(summary(beauty.res)$quantiles[,c(1,3,5)],digits=2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+
+Compare with standard \texttt{lm} fit:
+
+<<>>=
+lm_summary<-summary(lm(evaluation~beauty,
+                       beautydata))
+
+round(lm_summary$coef,digits=2)
+round(lm_summary$sigma,digits=2)
+@
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+
+Note that: (a) with uniform priors, we get a Bayesian estimate equal to the MLE, (b) we get uncertainty estimates for $\sigma$ in the Bayesian model.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+\framesubtitle{Posterior distributions of parameters}
+
+
+<<fig.height=2>>=
+op<-par(mfrow=c(1,3),pty="s")
+traceplot(beauty.res)
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
+\framesubtitle{Posterior distributions of parameters}
+
+<<echo=FALSE,fig.height=3>>=
+MCMCsamp<-as.matrix(beauty.res)
+op<-par(mfrow=c(1,3),pty="s")
+hist(MCMCsamp[,1],main=expression(beta[0]),
+     xlab="",freq=FALSE)
+hist(MCMCsamp[,2],main=expression(beta[1]),
+     xlab="",freq=FALSE)
+hist(MCMCsamp[,3],main=expression(sigma),
+     xlab="",freq=FALSE)
+@
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]\frametitle{Homework 1: Rats' weights}
+\framesubtitle{Source: Lunn et al 2012}
+
+Five measurements of a rat's weight, in grams, as a function of some x (say some nutrition-based variable). Note that here we will center the predictor in the model code. \label{ratseg}
+
+First we load/enter the data:
+
+<<>>=
+data<-list(x=c(8,15,22,29,36),
+           y=c(177,236,285,350,376))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Homework 1: Rats' weights}
+\framesubtitle{Source: Lunn et al 2012}
+
+Then we fit the linear model using \texttt{lm}, for comparison with the Bayesian model:
+<<>>=
+lm_summary_rats<-summary(fm<-lm(y~x,data))
+round(lm_summary_rats$coef,digits=3)
+@
+
+Fit this linear model using JAGS.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Homework 2: Rats' weights (solution in next class)}
+
+\small
+Fit the following model in JAGS:
+<<>>=
+cat("
+model
+   {
+    ## specify model for data:
+    for(i in 1:5){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + beta1 * (x[i]-mean(x[]))
+    }
+    # priors:
+    beta0 ~ dunif(-500,500)
+    beta1 ~ dunif(-500,500)
+    tau <- 1/sigma2
+    sigma2 <-pow(sigma,2)
+    sigma ~ dunif(0,200)
+   }",
+     file="JAGSmodels/ratsexample2.jag" )
+@     
+
+<<echo=FALSE,eval=FALSE,label="logsigma">>=
+cat("
+model
+   {
+    ## specify model for data:
+    for(i in 1:5){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + beta1 * (x[i]-mean(x[]))
+    }
+    # priors:
+    beta0 ~ dunif(-500,500)
+    beta1 ~ dunif(-500,500)
+    tau <- 1/sigma2
+    sigma <-pow(sigma2,1/2)
+    #sigma ~ dunif(0,200)
+    log(sigma2) <- 2* log.sigma
+    log.sigma ~ dunif(0,8)
+   }",
+     file="JAGSmodels/ratsexample2llogsigma.jag" )
+
+track.variables<-c("beta0","beta1","sigma")
+
+## define model:
+rat.mod <- jags.model( 
+  file = "JAGSmodels/ratsexample2llogsigma.jag",
+                     data=data,
+                     n.chains = 4,
+                     n.adapt =2000, 
+                     quiet=T)
+
+## sample from posterior:
+rat.res <- coda.samples(rat.mod,
+                          var = track.variables,
+                          n.iter = 2000,
+                          thin = 1 ) 
+
+summary(rat.res)$statistics[,1:2]
+@
+
+\end{frame}
+
+\section{Likelihood}
+
+\begin{frame}[fragile]\frametitle{Review of the Likelihood Function}
+
+\textbf{Discrete case}: Suppose the observed sample values (binomially distributed) are $x_1, x_2,\dots, x_n$. The joint probability of getting them is
+
+\begin{equation}
+P(X_1=x_1,X_2=x_2,\dots,X_n=x_n) = f(X_1=x_1,X_2=x_2,\dots,X_n=x_n;\theta)  
+\end{equation} 
+
+\noindent
+i.e., the function $f$ is the value of the joint probability \textbf{distribution} of the random variables $X_1,\dots,X_n$ at $X_1=x_1,\dots,X_n=x_n$. Since the sample values have been observed and are fixed, $f(x_1,\dots,x_n;\theta)$ is a function of $\theta$. The function $f$ is called a \textbf{likelihood function}.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Review of the Likelihood Function}
+
+\textbf{Continuous case}
+
+Here, $f$ is the joint probability \textbf{density}, the rest is the same as above.
+
+If $x_1, x_2,\dots, x_n$ are the values of a random sample from a population with parameter $\theta$, the \textbf{likelihood function} of the sample is given by 
+
+\begin{equation}
+L(\theta) = f(x_1, x_2,\dots, x_n; \theta)	
+\end{equation}
+
+\noindent
+for values of $\theta$ within a given domain. Here, $f(X_1=x_1,X_2=x_2,\dots,X_n=x_n;\theta)$ is the joint probability distribution or density of the random variables $X_1,\dots,X_n$ at $X_1=x_1,\dots,X_n=x_n$.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Review of the Likelihood Function}
+
+So, the method of maximum likelihood consists of maximizing the likelihood function with respect to $\theta$. The value of $\theta$ that maximizes the likelihood function is the \textbf{MLE} (maximum likelihood estimate) of $\theta$.
+
+\end{frame}
+
+\begin{frame}\frametitle{Finding the MLE by hand}
+
+The likelihood function in the binomial case:
+
+\begin{equation}
+L(\theta) = {n \choose x} \theta^x (1-\theta)^{n-x}  
+\end{equation}
+
+Log likelihood:
+
+\begin{equation}
+\ell (\theta) = \log {n \choose x} + x \log \theta + (n-x)	\log (1-\theta)
+\end{equation}
+
+\end{frame}
+
+\begin{frame}\frametitle{Finding the MLE by hand}
+
+Differentiating and equating to zero to get the maximum:
+
+\begin{equation}
+\ell ' (\theta) = \frac{x}{\theta} - \frac{n-x}{1-\theta} = 0	
+\end{equation}
+
+
+How to get the second term: let $u=1-\theta$. Then, $du/d\theta= -1$. Now, $y=(n-x)\log(1-\theta)$ can be rewritten in terms of u: $y=(n-x)\log(u)$. So, $dy/du= \frac{n-x}{u}$. Now $dy/d\theta=dy/du \times du/d\theta= \frac{n-x}{u}\times (-1)=-\frac{n-x}{1-\theta}$.
+
+\end{frame}
+
+\begin{frame}\frametitle{Finding the MLE by hand}
+
+Rearranging terms we get:
+
+$ \frac{x}{\theta} - \frac{n-x}{1-\theta} = 0 \Leftrightarrow  
+\frac{x}{\theta} = \frac{n-x}{1-\theta} 
+\Leftrightarrow  
+\hat \theta = \frac{x}{n}$ 
+
+\end{frame}
+
+\begin{frame}\frametitle{The Likelihood Function}
+
+The point of the MLE method is to find out the most likely value(s) of the parameter(s) that generated the data (assuming some probability model for the data).
+
+\end{frame}
+
+\section{Example 4: Multiple regression}
+
+\begin{frame}[fragile]\frametitle{Multiple predictors}
+\framesubtitle{Source: Baayen's book}
+\small
+We fit log reading time to Trial id (centered), Native Language, and Sex. The categorical variables are centered as well. Note: This model is incorrect! We should have fit a linear mixed model.
+
+<<>>=
+lexdec<-read.table("data/lexdec.txt",header=TRUE)
+data<-lexdec[,c(1,2,3,4,5)]
+
+contrasts(data$NativeLanguage)<-contr.sum(2)
+contrasts(data$Sex)<-contr.sum(2)
+
+lm_summary_lexdec<-summary(fm<-lm(RT~
+                                    scale(Trial,scale=F)+
+  NativeLanguage+Sex,data))
+
+round(lm_summary_lexdec$coef,digits=2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Multiple predictors}
+
+Preparing the data for JAGS:
+
+<<>>=
+contrasts(data$NativeLanguage)
+contrasts(data$Sex)
+
+
+eng<-ifelse(data$NativeLanguage=="English",1,-1)
+sex<-ifelse(data$Sex=="F",1,-1)
+
+dat<-list(y=data$RT,
+          Trial=(data$Trial-mean(data$Trial)),
+          Lang=eng,
+          Sex=sex)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Multiple predictors}
+\tiny
+The JAGS model:
+<<>>=
+cat("
+model
+   {
+    ## specify model for data:
+    for(i in 1:1659){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + 
+             beta1 * Trial[i]+
+             beta2 * Lang[i] +  beta3 * Sex[i] 
+    }
+    # priors:
+    beta0 ~ dunif(-10,10)
+    beta1 ~ dunif(-5,5)
+    beta2 ~ dunif(-5,5)
+    beta3 ~ dunif(-5,5)
+    tau <- 1/sigma2
+    sigma2 <-pow(sigma,2)
+    sigma ~ dunif(0,200)
+   }",
+     file="JAGSmodels/multregexample1.jag" )
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Multiple predictors}
+\small
+
+<<cache=TRUE>>=
+track.variables<-c("beta0","beta1",
+                   "beta2","beta3","sigma")
+library(rjags)
+
+lexdec.mod <- jags.model( 
+  file = "JAGSmodels/multregexample1.jag",
+                     data=dat,
+                     n.chains = 2,
+                     n.adapt =2000, 
+                      quiet=T)
+
+lexdec.res <- coda.samples( lexdec.mod,
+                                 var = track.variables,
+                              n.iter = 3000)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Multiple predictors}
+\small
+
+<<>>=
+round(summary(lexdec.res)$statistics[,1:2],
+      digits=2)
+round(summary(lexdec.res)$quantiles[,c(1,3,5)],
+      digits=2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Multiple predictors}
+
+Here is the lm fit for comparison (I centered all predictors):
+
+<<>>=
+lm_summary_lexdec<-summary(
+  fm<-lm(RT~scale(Trial,scale=F)
+         +NativeLanguage+Sex,
+               lexdec))
+round(lm_summary_lexdec$coef,digits=2)[,1:2]
+@
+
+\textbf{Note: We should have fit a linear mixed model here}; I will return to this later.
+
+\end{frame}
+å
+\section{Example 5: Generalized linear models}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+We have considered linear models like 
+
+\begin{equation}
+E[Y_i] = \mu_i = x_i^T \beta \quad y_i \sim N(\mu_i,\sigma^2)
+\end{equation}
+
+GLMs allow us to stay within the linear modeling framework, even if the relationship betwen response and explanatory variable is not linear.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+There is a wider class of distributions beyond the two we have seen (normal, binomial), that are called the \textbf{exponential family of distributions}; the normal and binomial fall within this family.
+
+The likelihood function of the exponential family's distributions can be written in very general terms as follows:
+
+\begin{equation} \label{genform}
+f(y; \theta_i, \phi)= \exp\left[\frac{y\theta_i - b(\theta_i)}{\phi/w}+c(y,\phi)\right]
+\end{equation}
+
+
+\end{frame}
+
+\subsection{Example 1: Normal distribution}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+Consider the normal distribution. We can write it in the general form of equation~\ref{genform}.
+
+\begin{equation}
+\begin{split}
+f(y) =& \frac{1}{\sigma\sqrt{2\pi}} \exp \left[-\frac{1}{2} \left(\frac{(y-\mu)}{\sigma}\right)^2 \right]\\
+=& \exp \left[ \log 1 - \log \sigma \sqrt{2\pi} - \frac{1}{2}\left(\frac{(y-\mu)}{\sigma}\right)^2\right]\\
+=& \exp \left[-\frac{1}{2}(\frac{y^2 + \mu^2 - 2y\mu}{\sigma^2}) - \log \sigma \sqrt{2\pi}\right] \\
+\end{split}
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+A little bit of algebraic manipulation (exercise) will now give us:
+
+\begin{equation}
+\begin{split}
+=& \exp \left[\frac{y\mu}{\sigma^2} - \frac{\mu^2 }{2\sigma^2} - \frac{y^2}{2\sigma^2} + \frac{\log\sigma\sqrt{2\pi}}{2}\right]\\
+=& \exp \left[\frac{y\mu - \mu^2/2}{\sigma^2} + c(y,\phi) \right] \quad \hbox{ i.e., } c(y,\phi)=- \frac{y^2}{2\sigma^2} + \frac{\log\sigma\sqrt{2\pi}}{2}\\
+=& \exp \left[\frac{y\theta - b(\theta)}{\phi/w} + c(y,\phi) \right]\\
+  \end{split}
+\end{equation}
+
+Here, $\theta=\mu$, $\phi=\sigma^2$, $w=1$, and we have 
+$b(\theta)=\mu^2/2$, $c(y,\phi)=-\frac{y^2}{2\sigma^2} + \frac{\log \sigma \sqrt{2\pi}}{2}$.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+This general formulation gives us two useful results:
+
+\begin{enumerate}
+\item
+The first derivative of $b(\theta)=\frac{\mu^2}{2}$, is $b'(\theta)=\mu$. This is a general result for the exponential family: 
+
+$E[y]=b'(\theta)=\mu$
+
+\item
+The variance of Y is $Var(Y)=\frac{\phi}{w} b''(\theta)$. So, here, we'd get 
+
+$Var(Y)=\frac{\sigma^2}{1} 1=\sigma^2$
+\end{enumerate}
+
+\end{frame}
+
+\subsection{Example 2: Binomial distribution}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+\begin{itemize}
+\item
+Let's look at another example of how we can write an exponential family distribution in this general form. 
+\item
+Consider the binomial distribution, which we will start by writing as below. 
+\item
+Here, n is the total number of trials, and y is the proportion of successes. 
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+For example, n=10, y=7/10, gives us 7 successes out of 10. This is just another way to parameterize the binomial distribution, although it is not one that you have seen before.
+
+\begin{equation}
+ny \sim Binomial\left(n,\frac{\exp(\theta)}{1+\exp(\theta)}\right) \quad \hbox{ i.e., } p = \frac{\exp(\theta)}{1+\exp(\theta)}
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+\begin{equation}
+\begin{split}
+f(ny; \theta,\phi) =& {n \choose ny} p^{ny} (1-p)^{n-ny} \\
+=& \exp\left[\log {n \choose ny} + ny \log p + (n-ny)\log(1-p)\right]\\
+=& \exp\left[ny \log \frac{p}{1-p} + n \log (1-p)+c(y,\phi)\right] \quad \hbox{ i.e., } c(y,\phi) = \log {n \choose ny}\\
+\end{split}
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+Since $p = \frac{\exp(\theta)}{1+\exp(\theta)}$, we can write 
+
+\begin{equation}
+n \log (1-p) = n \log \frac{1}{1+\exp(\theta)} = - n \log(1+\exp(\theta))
+\end{equation}
+
+Also, let $\theta=\log\frac{p}{1-p}$.
+
+Then, we can continue as follows:
+
+\begin{equation}
+\begin{split}
+f(ny; \theta,\phi) =& \exp\left[ny \log \frac{p}{1-p} + n \log (1-p)+c(y,\phi)\right] \quad \hbox{ i.e., } c(y,\phi) = \log {n \choose ny} \\
+=& \exp\left[ny\theta - n \log(1+\exp(\theta)) +  c(y,\phi)\right]\\
+=&  \exp\left[\frac{y\theta - b(\theta)}{\phi/n} + c(y,\phi)\right] \quad \hbox{ i.e., } b(\theta)=n\log(1+\exp(\theta))\\
+\end{split}
+\end{equation}
+
+
+%We can confirm that $E[Y]=b'(\theta)$ and $Var(Y) = \frac{\phi}{w} b''(\theta)$. Here, $w=n$ and $\phi=1$.
+
+%\begin{enumerate}
+%\item
+%$b(\theta)=\log(1+\exp(\theta))$, and $b'(\theta)= \frac{\exp(\theta)}{1+\exp(\theta)}=E[Y]$.
+%\item 
+%$Var(Y) = \frac{1}{n} \frac{\exp(\theta)}{1+\exp(\theta)} =  \frac{p}{n}$.
+%\end{enumerate}
+
+\end{frame}
+
+\subsection{The canonical link}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+For each data point $Y_i$ from a distribution that's a member of the exponential family, the general form of the likelihood function is:
+
+\begin{equation} \label{genform2}
+f(y; \theta_i, \phi)= \exp\left[\frac{y\theta_i - b(\theta_i)}{\phi/w}+c(y,\phi)\right]
+\end{equation}
+
+where $E[Y_i] = \mu_i = h(x_i^T \beta)$. Since we know that $E[Y_i] = b'(\theta_i)$, 
+
+we can write
+
+\begin{equation}
+E(Y_i)=\mu_i = h(x_i^T \beta) = b'(\theta)
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+Now, if we want to get $x_i^T \beta$, we just take the inverse of the function $h(\cdot)$, call it $g(\cdot)$.
+This gives us something called the canonical link function:
+
+\begin{equation}
+x_i^T \beta =  h^{-1}(b'(\theta)) = \explain{g}{\hbox{canonical link}}b'(\theta)
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+For different distributions in the exponential family, the canonical link functions are as follows:
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+Distribution & $h(x_i^T \beta)=\mu_i$ & $g(\mu_i)=\theta_i$\\
+\hline
+Binomial & $\frac{\exp[\theta_i]}{1+\exp[\theta_i]}$ & $\log \frac{y}{1-y}$ \\
+logit link & & \\
+\hline
+Normal & $\theta$ & $g=h$ \\
+identity & & \\
+\hline
+Poisson & $\exp[\theta]$ & $\log[\mu]$ \\
+log & & \\
+\hline
+Gamma & $-\frac{1}{\theta}$ & $-\frac{1}{\mu_i}$\\
+inverse & & \\
+\hline
+Cloglog & $1-\exp[-\exp[\theta_i]]$ & $\log(-\log(1-\mu_i))$\\
+cloglog & & \\
+\hline
+Probit & $\Phi(\theta)$ & 
+$\Phi^{-1}(\theta)$ (qnorm)\\
+probit & & \\
+\hline
+\end{tabular}
+\end{table}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+The big thing about the canonical link is that is expresses $\theta_i$ as a linear combination of the parameters: $x_i^T \beta$.  You can decide which link to use by plotting $g(\mu_i)$ against the predictor (in case we have only a single predictor x). 
+
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+We consider the model
+
+\begin{equation}
+y_i \sim Binomial(p_i, n_i) \quad logit(p_i) = \beta_0 + \beta_1 (x_i - \bar{x})
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+A simple example is the beetle data from Dobson et al 2010:
+
+<<>>=
+beetledata<-read.table("data/beetle.txt",header=T)
+head(beetledata)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+Prepare data for JAGS:
+
+<<>>=
+dat<-list(x=beetledata$dose-mean(beetledata$dose),
+          n=beetledata$number,
+          y=beetledata$killed)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+<<>>=
+cat("
+model
+   {
+for(i in 1:8){
+    y[i] ~ dbin(p[i],n[i])
+    logit(p[i]) <- beta0 + beta1 * x[i]
+}
+    # priors:
+#    beta0 ~ dunif(0,pow(100,2))
+#    beta1 ~ dunif(0,pow(100,2))
+     beta0 ~ dnorm(0,100^2)
+     beta1 ~ dnorm(0,100^2)
+   }",
+     file="JAGSmodels/glmexample1.jag" )
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+Notice use of initial values:
+
+<<>>=
+track.variables<-c("beta0","beta1")
+## new:
+inits <- list (list(beta0=0,
+                    beta1=0))
+
+glm.mod <- jags.model( 
+  file = "JAGSmodels/glmexample1.jag",
+                     data=dat,
+                    ## new:
+                    inits=inits,
+                     n.chains = 1,
+                      n.adapt =2000, quiet=T)
+
+glm.res <- coda.samples( glm.mod,
+                          var = track.variables,
+                              n.iter = 2000) 
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+<<>>=
+round(summary(glm.res)$statistics[,1:2],
+      digits=2)
+round(summary(glm.res)$quantiles[,c(1,3,5)],
+      digits=2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+The values match up with glm output:
+
+<<>>=
+round(coef(glm(killed/number~scale(dose,scale=F),
+         weights=number,
+           family=binomial(),beetledata)),
+      digits=2)
+@
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs}
+
+<<fig.height=5>>=
+plot(glm.res)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Homework: GLMs}
+
+We fit uniform priors to the coefficients $\beta$:
+\begin{verbatim}
+    # priors:
+    beta0 ~ dunif(0,pow(100,2))
+    beta1 ~ dunif(0,pow(100,2))
+\end{verbatim}
+
+Fit the beetle data again, using suitable normal distribution priors for the coefficients beta0 and beta1.
+Does the posterior distribution depend on the prior?
+
+\end{frame}
+
+\section{Prediction}
+
+\begin{frame}[fragile]\frametitle{GLMs: Predicting future/missing data}
+
+One important thing we can do is to predict the posterior distribution of future or missing data. 
+
+One easy to way to do this is to define how we expect the predicted data to be generated.
+
+This example revisits the earlier toy example from Lunn et al.\ on rat data (slide~\pageref{ratseg}).
+
+<<>>=
+data<-list(x=c(8,15,22,29,36),
+           y=c(177,236,285,350,376))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs: Predicting future/missing data}
+\small
+<<>>=
+cat("
+model
+   {
+    ## specify model for data:
+    for(i in 1:5){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + beta1 * (x[i]-mean(x[]))
+    }
+    ## prediction
+    mu45 <- beta0+beta1 * (45-mean(x[]))
+    y45 ~ dnorm(mu45,tau)
+    # priors:
+    beta0 ~ dunif(-500,500)
+    beta1 ~ dunif(-500,500)
+    tau <- 1/sigma2
+    sigma2 <-pow(sigma,2)
+    sigma ~ dunif(0,200)
+   }",
+     file="JAGSmodels/ratsexample2pred.jag" )
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs: Predicting future/missing data}
+
+<<>>=
+track.variables<-c("beta0","beta1","sigma","y45")
+
+rats.mod <- jags.model( 
+  file = "JAGSmodels/ratsexample2pred.jag",
+                     data=data,
+                     n.chains = 1,
+                      n.adapt =2000, quiet=T)
+
+rats.res <- coda.samples( rats.mod,
+                          var = track.variables,
+                              n.iter = 2000,
+                                thin = 1) 
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs: Predicting future/missing data}
+
+<<>>=
+round(summary(rats.res)$statistics[,1:2],
+       digits=2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{GLMs: Predicting future/missing data}
+
+
+<<echo=FALSE>>=
+densityplot(rats.res)
+@
+
+\end{frame}
+
+\section{Concluding remarks}
+
+\begin{frame}\frametitle{Summing up}
+
+\begin{enumerate}
+\item
+In some cases Bayes' Theorem can be used analytically (Examples 1, 2)
+\item 
+It is relatively easy to define different kinds of Bayesian models using programming languages like JAGS.
+\item We saw some examples from linear models (Examples 3-5).
+\item Coming up next: Linear mixed models.
+\end{enumerate}
+
+\end{frame}
+
+
+\end{document}

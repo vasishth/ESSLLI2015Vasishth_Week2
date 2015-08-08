@@ -1,0 +1,1044 @@
+\documentclass[red]{beamer}
+
+\usepackage{mathtools}
+\makeatletter
+\newcommand{\explain}[2]{\underset{\mathclap{\overset{\uparrow}{#2}}}{#1}}
+\newcommand{\explainup}[2]{\overset{\mathclap{\underset{\downarrow}{#2}}}{#1}}
+\makeatother
+
+
+\usetheme{Antibes}
+\usecolortheme{lily}
+
+%\usepackage{gb4e}
+
+%\usepackage{color}
+
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+
+%\fvset{frame=single,framesep=1mm,fontfamily=courier,fontsize=\scriptsize,numbers=left,framerule=.3mm,numbersep=1mm,commandchars=\\\{\}}
+
+
+
+\usepackage[english]{babel}
+%\usepackage[latin1]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+
+\usepackage{mathptmx}
+\usepackage{amsthm}
+
+\usepackage{esint}
+
+\setbeamercovered{transparent}
+
+
+\title{Lecture 1: Statistical methods for linguistic research: Advanced Tools}
+\author{Shravan Vasishth}
+\institute{Department of Linguistics\\
+University of Potsdam, Germany}
+
+\setbeamerfont{page number in head/foot}{size=\large}
+\setbeamertemplate{footline}[frame number]
+
+\begin{document}
+
+<<setup,include=FALSE,cache=FALSE>>=
+library(knitr)
+library(coda)
+
+# set global chunk options, put figures into folder
+options(replace.assign=TRUE,show.signif.stars=FALSE)
+opts_chunk$set(fig.path='figures/figure-', fig.align='center', fig.show='hold')
+options(replace.assign=TRUE,width=75)
+opts_chunk$set(dev='postscript')
+@
+
+\frame{\titlepage}
+
+\section{Introduction}
+
+\begin{frame}\frametitle{Motivating this course}
+
+\begin{itemize}
+\item
+In psychology and linguistics, we usually use frequentist methods to analyze our data. 
+\item
+The R library I use most is \texttt{lme4}.
+\item 
+In recent years, very powerful programming languages have become available that make Bayesian modeling relatively easy. 
+\item Bayesian tools have several important advantages over frequentist methods, but they require some very specific background knowledge.
+\item
+My goal in this course is to try to provide that background knowledge.
+\end{itemize}
+
+\end{frame}
+\begin{frame}\frametitle{Motivating this course}
+
+In this introductory lecture, my goals are to 
+
+\begin{enumerate}
+\item
+motivate you look at Bayesian Linear Mixed Models as an alternative to using frequentist methods.
+\item 
+make sure we are all on the same page regarding the moving parts of a linear mixed model.
+\end{enumerate}
+
+\end{frame}
+
+\section{Preliminaries}
+
+\begin{frame}[fragile]\frametitle{Prerequisites}
+
+\begin{enumerate}
+\item
+ Familiarity with fitting standard LMMs such as:
+
+\begin{verbatim}
+lmer(rt~cond+(1+cond|subj)+(1+cond|item),dat)
+\end{verbatim}
+\item
+Basic knowledge of R.
+\item A little bit of fearlessness in the face of basic algebra and some very simple calculus derivations (kept to a minimum).
+\item For detailed derivations and more background theory, please see:
+\begin{enumerate}
+\item my linear modeling notes: https://github.com/vasishth/LM
+\item my Bayesian modeling notes: to-do
+\end{enumerate}
+
+\end{enumerate}
+
+
+\end{frame}
+
+
+\section{Repeated measures data}
+
+\begin{frame}[fragile]\frametitle{Linear mixed models}
+\framesubtitle{Example: Gibson and Wu data, Language and Cognitive Processes, 2013}
+
+\includegraphics{gibsonwusnap}
+
+<<echo=FALSE>>=
+## load data:
+data<-read.table("data/gibsonwu2012data.txt",header=T)
+## take reciprocal rt to normalize residuals:
+data$rrt<- -1000/data$rt
+## define predictor x, coding as sum contrasts:
+data$x <- ifelse(
+  data$type%in%c("subj-ext"),-1,1)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Linear mixed models}
+\framesubtitle{Example: Gibson and Wu data, Language and Cognitive Processes, 2013}
+
+<<>>=
+headnoun<-subset(data,region=="headnoun")
+## no. of subjects:
+length(unique(headnoun$subj))
+## no. of items:
+length(unique(headnoun$item))
+## no. of rows in data frame:
+dim(headnoun)[1]
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Linear mixed models}
+\framesubtitle{Example: Gibson and Wu data, Language and Cognitive Processes, 2013}
+
+<<>>=
+head.means<-aggregate(rt~subj+type,
+                      mean,data=headnoun)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Linear mixed models}
+\framesubtitle{Example: Gibson and Wu data, Language and Cognitive Processes, 2013}
+
+<<>>=
+t.test(log(subset(head.means,type=="subj-ext")$rt),
+       log(subset(head.means,type=="obj-ext")$rt),
+       paired=T)
+t.test(subset(head.means,
+              type=="subj-ext")$rt,
+       subset(head.means,
+              type=="obj-ext")$rt,
+paired=T)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Linear mixed models}
+\framesubtitle{Example: Gibson and Wu data, Language and Cognitive Processes, 2013}
+
+\begin{itemize}
+\item
+Subject vs object relative clauses in Chinese, self-paced reading. 
+\item
+The critical region is the head noun.
+\item
+The goal is to find out whether ORs are harder to process than SRs at the head noun.
+\end{itemize}
+
+\includegraphics{gibsonwuexample}
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Linear mixed models}
+\framesubtitle{Example: Gibson and Wu 2012 data}
+
+
+<<>>=
+head(data[,c(1,2,3,4,7,10,11)])
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{lme4 model of Gibson and Wu data}
+\framesubtitle{Crossed varying intercepts and slopes model, with correlation}
+
+<<echo=F>>=
+library(lme4)
+@
+
+This is the type of ``maximal'' model that most people fit nowadays, following Barr et al 2013's Keep it Maximal paper:
+
+<<>>=
+m1 <- lmer(rrt~x+(1+x|subj)+(1+x|item),
+          subset(data,region=="headnoun"))
+
+m2 <- lmer(rrt~x+(1+x|subj)+(1|item),
+          subset(data,region=="headnoun"))
+
+
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{lme4 model of Gibson and Wu data}
+\framesubtitle{Crossed varying intercepts and slopes model, with correlation}
+
+I will now show two major (related) problems that occur with the small datasets we usually have in psycholinguistics: 
+
+\begin{itemize}
+\item  
+The correlation estimates either lead to degenerate variance covariance matrices, and/or
+\item
+The correlation estimates are wild estimates that have no bearing with reality.
+\end{itemize}
+
+This is not a failing of \texttt{lmer}, but rather of the researcher: the model is overparameterized. The researcher is demanding too much of \texttt{lmer}.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{lme4 model of Gibson and Wu data}
+\framesubtitle{Typical data analysis: Crossed varying intercepts and slopes model, with correlation}
+
+<<>>=
+round(summary(m1)$coefficients,digits=3)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The ``best'' model}
+
+One way to decide on the ``best'' model is to find the simplest model using the Generalized Likelihood Ratio Test (Pinheiro and Bates 2000). Here, this is the \textbf{varying intercepts} model, not the maximal model.
+
+\small
+<<>>=
+m1<- lmer(rrt~x+(1+x|subj)+(1+x|item),
+          headnoun)
+m1a<- lmer(rrt~x+(1|subj)+(1|item),
+          headnoun)
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{The ``best'' model}
+
+\small
+<<>>=
+anova(m1,m1a)
+@
+
+Another approach is shown in Bates, Kliegl, Vasishth, Baayen: 
+ArXiv preprint http://arxiv.org/abs/1506.04967.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+Here, we simulate data with the same structure, sample size, and parameter values as the Gibson and Wu data, except that we assume that the correlations are 0.6. Then we analyze the data using \texttt{lmer} (maximal model). \textbf{Can lmer recover the correlations}?
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+We define a function called \texttt{new.df} that generates data similar to the Gibson and Wu data-set.
+For code, see accompanying lecture1.R file.
+
+<<echo=FALSE,cache=TRUE>>=
+new.df <- function(cond1.rt=487, effect.size=123, 
+                   sdev=544,
+                   sdev.int.subj=160, sdev.slp.subj=195, 
+                   rho.u=0.6,
+                   nsubj=37,
+                   sdev.int.items=154, sdev.slp.items=142,
+                   rho.w=0.6,
+                   nitems=15) {
+  library(MASS)
+  
+  ncond <- 2
+  
+  subj <- rep(1:nsubj, each=nitems*ncond)
+  item <- rep(1:nitems, nsubj, each=ncond)
+  
+  cond <- rep(0:1, nsubj*nitems)
+  err  <- rnorm(nsubj*nitems*ncond, 0, sdev)
+  d    <- data.frame(subj=subj, item=item, 
+                     cond=cond+1, err=err)
+  
+  Sigma.u<-matrix(c(sdev.int.subj^2,
+                    rho.u*sdev.int.subj*sdev.slp.subj,
+                    rho.u*sdev.int.subj*sdev.slp.subj,
+                    sdev.slp.subj^2),nrow=2)
+  
+  Sigma.w<-matrix(c(sdev.int.items^2,
+                    rho.u*sdev.int.items*sdev.slp.items,
+                    rho.u*sdev.int.items*sdev.slp.items,
+                    sdev.slp.items^2),nrow=2)
+  
+  # Adding random intercepts and slopes for subjects:
+  ## first col. has adjustment for intercept, 
+  ## secdon col. has adjustment for slope
+  subj.rand.effs<-mvrnorm(n=nsubj,rep(0,ncond),Sigma.u)
+  
+  item.rand.effs<-mvrnorm(n=nitems,rep(0,ncond),Sigma.w)
+  
+  re.int.subj <- subj.rand.effs[,1]
+  d$re.int.subj <- rep(re.int.subj, each=nitems*ncond)
+  re.slp.subj   <- subj.rand.effs[,2]
+  
+  d$re.slp.subj <- rep(re.slp.subj, 
+                       each=nitems*ncond) * (cond - 0.5)
+  
+  re.int.item <- item.rand.effs[,1]
+  d$re.int.item <- rep(re.int.item, nsubj, each=ncond)
+  re.slp.item <- item.rand.effs[,2]
+  d$re.slp.item <- rep(re.slp.item, nsubj, 
+                       each=ncond) * (cond - 0.5)
+  
+  d$rt <- (cond1.rt + cond*effect.size
+           + d$re.int.subj + d$re.slp.subj
+           + d$re.int.item + d$re.slp.item
+           + d$err)
+  
+  return(list(d,cor(re.int.subj,re.slp.subj),
+              cor(re.int.item,re.slp.item)))
+}
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+Next, we write a function that generates data for us repeatedly with the following specifications: sample size for subjects and items, and some correlation between subject intercept and slope, and item intercept and slope.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+<<cache=TRUE>>=
+gendata<-function(subjects=37,items=15){
+  dat<-new.df(nsubj=subjects,nitems=items,
+              rho.u=0.6,rho.w=0.6)
+  dat <- dat[[1]]
+  dat<-dat[,c(1,2,3,9)]
+  dat$x<-ifelse(dat$cond==1,-0.5,0.5)
+  
+return(dat)
+}
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+Set number of simulations:
+
+<<>>=
+nsim<-100
+@
+
+Next, we generate simulated data \Sexpr{nsim} times, and then store the estimated subject and item level correlations in the random effects, and plot their distributions. 
+
+We do this for two settings: Gibson and Wu sample sizes (37 subjects, 15 items), and 50 subjects and 30 items.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+37 subjects and 15 items
+
+<<cache=TRUE>>=
+library(lme4)
+subjcorr<-rep(NA,nsim)
+itemcorr<-rep(NA,nsim)
+
+for(i in 1:nsim){
+dat<-gendata()  
+m3<-lmer(rt~x+(1+x|subj)+(1+x|item),dat)
+subjcorr[i]<-attr(VarCorr(m3)$subj,"correlation")[1,2]
+itemcorr[i]<-attr(VarCorr(m3)$item,"correlation")[1,2]
+}
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+<<echo=FALSE,fig.height=4>>=
+op<-par(mfrow=c(1,2),pty="s")
+hist(subjcorr,freq=FALSE,xlab=expression(hat(rho)[u]),
+     main="Distribution of subj. corr.")
+abline(v=0.6,lwd=3)
+hist(itemcorr,freq=FALSE,xlab=expression(hat(rho)[w]),
+     main="Distribution of item corr.")
+abline(v=0.6,lwd=3)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+50 subjects and 30 items
+
+<<cache=TRUE>>=
+subjcorr<-rep(NA,nsim)
+itemcorr<-rep(NA,nsim)
+
+for(i in 1:nsim){
+dat<-gendata(subjects=50,items=30)  
+m3<-lmer(rt~x+(1+x|subj)+(1+x|item),dat)
+subjcorr[i]<-attr(VarCorr(m3)$subj,"correlation")[1,2]
+itemcorr[i]<-attr(VarCorr(m3)$item,"correlation")[1,2]
+}
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+<<echo=FALSE,fig.height=4>>=
+op<-par(mfrow=c(1,2),pty="s")
+hist(subjcorr,freq=FALSE,xlab=expression(hat(rho)[u]),
+     main="Distribution of subj. corr.")
+abline(v=0.6,lwd=3)
+hist(itemcorr,freq=FALSE,xlab=expression(hat(rho)[w]),
+     main="Distribution of item corr.")
+abline(v=0.6,lwd=3)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{How meaningful were the lmer estimates of correlations in the maximal model m1?}
+\framesubtitle{Simulated data}
+
+Conclusion:
+
+\begin{enumerate}
+\item
+It seems that lmer can estimate the correlation parameters just in case sample size for items and subjects is ``large enough'' (this can be established using simulation, as done above).
+\item
+Barr et al's recommendation to fit a maximal model makes sense only if it's already clear that we have enough data to estimate all the variance components and parameters. 
+\item That is rarely the case in psychology and linguistics, especially when we go to more complex designs than a simple two-condition study.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}\frametitle{Keep it maximal?}
+
+Gelman and Hill (2007, p.\ 549) make a more nuanced statement than ``Keep it Maximal'':
+
+\begin{quote}
+Don't get hung up on whether a coefficient ``should'' vary by group. Just allow it to vary in the model, and then, if the estimated scale of variation is small \dots, maybe you can ignore it if that would be more convenient.
+\textbf{Practical concerns sometimes limit the feasible complexity of a model}--for example, we might fit a varying-intercept model first, then allow slopes to vary, then add group-level predictors, and so forth. Generally, however, \textbf{it is only the difficulties of fitting and, especially, understanding the models that keeps us from adding even more complexity, more varying coefficients, and more interactions}.
+\end{quote}
+\end{frame}
+
+\section{Why fit Bayesian LMMs?}
+
+\begin{frame}\frametitle{Advantages of fitting a Bayesian LMM}
+
+\begin{itemize}
+\item For such data, there can be situations where you \textit{really} need to or want to fit full variance-covariance matrices for random effects. Bayesian LMMs will let you fit them even in cases where \texttt{lmer} would fail to converge or return nonsensical estimates (due to too little data). 
+
+The way we will set them up, Bayesian LMMs will return a zero correlation with a wide credible interval, unless there is enough data pointing to a non-zero correlation.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}\frametitle{Advantages of fitting a Bayesian LMM}
+
+\begin{itemize}
+\item
+A direct answer to the research question can be obtained by examining the posterior distribution given data.  
+
+\item
+We will abandon 
+the traditional hard binary decision associated  with frequentist methods: \textit{$p<0.05$ implies reject null, and $p>0.05$ implies ``accept'' null}. \textbf{We are more interested in quantifying our uncertainty about the parameter estimate in question}.
+\item
+Prior knowledge can be included in the model.
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Disadvantages of doing a Bayesian analysis}
+
+\begin{itemize}
+\item
+You have to invest effort into specifying a model; unlike \texttt{lmer}, which involves a single line of code, JAGS and Stan model specifications can extend to 20-30 lines. 
+
+A lot of decisions have to be made.
+
+\item There is a steep learning curve; you have to know a bit about probability distributions, MCMC methods, and of course Bayes' Theorem. 
+
+\item
+It takes much more time to fit and assess a complicated model in a Bayesian setting than with \texttt{lmer}.
+\end{itemize}
+
+But I will try to demonstrate to you in this course that it's worth the effort, especially when you don't have a lot of data (usually the case in psycholinguistics).
+
+\end{frame}
+
+%\begin{frame}\frametitle{Components of a Bayesian analysis}
+
+%\begin{enumerate}
+%\item Given data, specify a \textbf{likelihood function} or \textbf{sampling density}.
+%\item Specify \textbf{prior distribution} for model parameters.
+%\item Derive \textbf{posterior distribution} for parameters given likelihood function and prior density.
+%\item
+%Obtain \textbf{samples from posterior distribution} of parameters.
+%\item 
+%Summarize parameter samples and draw inferences.
+%\end{enumerate}
+
+%\end{frame}
+
+\section{Brief review of linear (mixed) models}
+
+\begin{frame}[fragile]\frametitle{Linear models}
+
+\begin{equation}
+\explain{y_i}{response}=\explainup{\beta_0}{parameter}~~+~~\explainup{\beta_1}{parameter}\explain{x_i}{predictor}~~+~~\explain{\epsilon_i}{error}
+\end{equation}
+
+where 
+\begin{itemize}
+\item 
+$\epsilon_i$ is the residual error, assumed to be normally distributed: $\epsilon_i \sim N(0,\sigma^2)$.
+\item
+Each response $y_i$ (i ranging from 1 to I) is independently and identically distributed as $y_i \sim N(\beta_0 + \beta_1 x_i, \sigma^2)$.
+\item
+\textbf{Point values for parameters}:
+$\beta_0$ and $\beta_1$ are the parameters to be estimated. In the frequentist setting, \textbf{these are point values, they have no distribution}.
+\item 
+\textbf{Null Hypothesis Significance Test (NHST)}:
+Usually, $\beta_1$ is the parameter of interest; in the frequentist setting, we test the null hypothesis that $\beta_1 = 0$.
+\end{itemize}
+
+\end{frame}
+
+\subsection{Linear models and repeated measures data}
+
+\begin{frame}\frametitle{Repeated measures data}
+
+\begin{itemize}
+\item
+Linear mixed models are useful for correlated data (e.g., repeated measures) where the responses $y$ are not independently distributed. 
+\item
+A key difference from linear models is that the intercept and/or slope vary by subject $j=1,\dots,J$ (and possibly also by item):
+
+\begin{equation}
+Y_{ijk} = \beta_j + b_{ij}+\epsilon_{ijk}
+\end{equation}
+
+\noindent
+$i=1,\dots,10$ is subject id, $j=1,2$ is the factor level, $k$ is the number of replicates.
+$b_i \sim N(0,\sigma_b^2), \epsilon_{ijk}\sim N(0,\sigma^2)$.
+
+\noindent
+$b_{ij}\sim N(0,\sigma_b^2)$. The variance $\sigma_b^2$ must be a $2\times 2$ matrix:
+
+\begin{equation}
+\begin{pmatrix}
+\sigma_1^2 & \rho \sigma_1 \sigma_2\\
+\rho \sigma_1 \sigma_2 & \sigma_2^2\\
+\end{pmatrix}
+\end{equation}
+
+
+%\begin{equation}
+%\explain{y_i}{response}=\explainup{[\beta_0+u_{0j} + w_{0k}]}{varyin%g~intercepts}~~+~~\explainup{[\beta_1+u_{1j}+w_{1k}]}{varying~slopes}\explain{x_i}{predictor}~~+~~\explain{\epsilon_i}{error}
+%\end{equation}
+
+\end{itemize}
+
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]\frametitle{Unpacking the lme4 model}
+\framesubtitle{Crossed varying intercepts and slopes model, with correlation}
+
+\begin{equation}
+\explain{y_i}{response}=\explainup{[\beta_0+u_{0j} + w_{0k}]}{varying~intercepts}~~+~~\explainup{[\beta_1+u_{1j}+w_{1k}]}{varying~slopes}\explain{x_i}{predictor}~~+~~\explain{\epsilon_i}{error}
+\end{equation}
+
+<<echo=F>>=
+library(lme4)
+@
+
+This is the ``maximal'' model we saw earlier:
+
+<<>>=
+m1 <- lmer(rrt~x+(1+x|subj)+(1+x|item),
+          headnoun)
+@
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Unpacking the lme4 model}
+\framesubtitle{Crossed varying intercepts and slopes model, with correlation}
+
+
+<<>>=
+round(summary(m1)$coefficient,digits=3)
+@
+
+\end{frame}
+
+\begin{frame}\frametitle{Unpacking the lme4 model}
+\framesubtitle{Crossed varying intercepts and slopes model, with correlation}
+
+\begin{equation}\label{eq:ranslp}
+ \hbox{\texttt{rrt}}_{ijk} = \underbrace{\beta_0 + u_{0j} + w_{0k}}_{\text{varying intercepts}}  + 
+\underbrace{\beta_1 + u_{1ij} + w_{1ik}}_{\text{varying slopes}} + \varepsilon_{ijk} 
+\end{equation}
+
+\begin{equation}\label{eq:covmat}
+\Sigma _u
+=
+\begin{pmatrix}
+\sigma _{u0}^2  & \rho _{u}\sigma _{u0}\sigma _{u1}\\
+\rho _{u}\sigma _{u0}\sigma _{u1}    & \sigma _{u1}^2\\
+\end{pmatrix}
+%\end{equation}
+\quad 
+%\begin{equation}\label{eq:covmatw}
+\Sigma _w
+=
+\begin{pmatrix}
+\sigma _{w0}^2  & \rho _{w}\sigma _{w0}\sigma _{w1}\\
+\rho _{w}\sigma _{w0}\sigma _{w1}    & \sigma _{w1}^2\\
+\end{pmatrix}
+\end{equation}
+
+\begin{equation}\label{eq:jointpriordist1}
+\begin{pmatrix}
+  u_0 \\ 
+  u_1 \\
+\end{pmatrix}
+\sim 
+\mathcal{N} \left(
+\begin{pmatrix}
+  0 \\
+  0 \\
+\end{pmatrix},
+\Sigma_{u}
+\right),
+\quad
+\begin{pmatrix}
+  w_0 \\ 
+  w_1 \\
+\end{pmatrix}
+\sim 
+\mathcal{N}\left(
+\begin{pmatrix}
+  0 \\
+  0 \\
+\end{pmatrix},
+\Sigma_{w}
+\right)
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The bivariate distribution}
+\framesubtitle{Independent (normal) random variables}
+
+If we have two random variables U0, U1, and we examine their joint distribution, we can plot a 3-d plot which shows, u0, u1, and f(u0,u1). E.g., $f(u0,u1)\sim (N(0,1))$, with two independent random variables:
+
+<<echo=FALSE,fig.height=4,cache=TRUE>>=
+library(mvtnorm)
+u0 <- u1 <- seq(from = -3, to = 3, length.out = 30)
+Sigma1<-diag(2)
+f <- function(u0, u1) dmvnorm(cbind(u0, u1), mean = c(0, 0),sigma = Sigma1)
+z <- outer(u0, u1, FUN = f)
+persp(u0, u1, z, theta = -30, phi = 30, ticktype = "detailed")
+@
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The bivariate distribution}
+\framesubtitle{Correlated random variables ($\rho=0.6$)}
+
+The random variables U, W could be correlated positively\dots
+
+<<echo=FALSE,fig.height=4,cache=TRUE>>=
+Sigma2<-matrix(c(1,.6,.6,1),byrow=FALSE,ncol=2)
+f <- function(u0, u1) dmvnorm(cbind(u0, u1), mean = c(0, 0),sigma = Sigma2)
+z <- outer(u0, u1, FUN = f)
+persp(u0, u1, z, theta = -30, phi = 30, ticktype = "detailed")
+@
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The bivariate distribution}
+\framesubtitle{Correlated random variables ($\rho=-0.6$)}
+
+\dots or negatively:
+
+<<echo=FALSE,fig.height=4,cache=TRUE>>=
+Sigma3<-matrix(c(1,-.6,-.6,1),byrow=FALSE,ncol=2)
+f <- function(u0, u1) dmvnorm(cbind(u0, u1), mean = c(0, 0),sigma = Sigma3)
+z <- outer(u0, u1, FUN = f)
+persp(u0, u1, z, theta = -30, phi = 30, ticktype = "detailed")
+@
+\end{frame}
+
+\begin{frame}\frametitle{Bivariate distributions}
+
+This is why, when talking about two normal random variables U0 and U1, we have to talk about
+
+\begin{enumerate}
+\item
+U0's mean and variance
+\item 
+U1's mean and variance
+\item 
+the correlation $\rho$ between them
+\end{enumerate}
+
+A mathematically convenient way to talk about it is in terms of the variance-covariance matrix we saw for the Gibson and Wu data:
+
+\small
+
+\begin{equation}\label{eq:sigmau}
+\Sigma_u = 
+\left[ \begin{array}{cc}
+\sigma_{\mathrm{u0}}^2 & \rho_u \, \sigma_{u0} \sigma_{u1}  \\
+\rho_u \, \sigma_{u0} \sigma_{u1} & \sigma_{u1}^2\end{array} \right]
+=
+\left[ \begin{array}{cc}
+0.61^2 & {\textcolor{red}{-.51}} \times 0.61 \times0.23  \\
+{\textcolor{red}{-.51}} \times 0.61 \times 0.23 & 0.23^2
+\end{array} \right]
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The variance components associated with subjects}
+
+\small
+\begin{Verbatim}[commandchars=\\\{\}]
+Random effects:
+ Groups   Name        Variance Std.Dev. Corr 
+ subj     (Intercept)    0.37  0.61         
+          so             0.05  0.23    {\textcolor{red}{-0.51}} 
+\end{Verbatim}
+
+\begin{equation}\label{eq:sigmau}
+\Sigma_u = 
+\left[ \begin{array}{cc}
+\sigma_{\mathrm{u0}}^2 & \rho_u \, \sigma_{u0} \sigma_{u1}  \\
+\rho_u \, \sigma_{u0} \sigma_{u1} & \sigma_{u1}^2\end{array} \right]
+=
+\left[ \begin{array}{cc}
+0.61^2 & {\textcolor{red}{-.51}} \times 0.61 \times0.23  \\
+{\textcolor{red}{-.51}} \times 0.61 \times 0.23 & 0.23^2
+\end{array} \right]
+\end{equation}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The variance components associated with items}
+
+\small
+\begin{Verbatim}[commandchars=\\\{\}]
+Random effects:
+ Groups   Name        Variance Std.Dev. Corr 
+ item     (Intercept)    0.11  0.33         
+          so             0.01  0.10    {\textcolor{red}{1.00}} 
+\end{Verbatim}
+
+\textbf{Note the by items intercept-slope correlation of $+1.00$}.
+
+
+\begin{equation}\label{eq:sigmaw}
+\Sigma_w = 
+\left[ \begin{array}{cc}
+\sigma_{\mathrm{w0}}^2 & \rho_w \, \sigma_{w0} \sigma_{w1}  \\
+\rho_w \, \sigma_{w0} \sigma_{w1} & \sigma_{w1}^2\end{array} \right]
+=
+\left[ \begin{array}{cc}
+0.33^2 & {\textcolor{red}{1}}\times 0.33\times 0.10 \\
+{\textcolor{red}{1}}\times 0.33\times 0.10 & 0.10^2\end{array} \right]
+\end{equation}
+
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The total number of parameters}
+
+
+The parameters are $\beta_0, \beta_1, \Sigma_u, \Sigma_w, \sigma$. Each of the matrices $\Sigma$ has three parameters. So we have 9 parameters.   
+
+Note that this model is overparameterized; there is simply not enough data to fit the correlation parameters.
+
+\end{frame}
+
+\subsection{Summary}
+
+\begin{frame}\frametitle{Summary so far}
+
+\begin{itemize}
+\item
+Linear mixed models allow us to take all relevant variance components into account; LMMs allow us to describe how the data were generated.
+\item 
+However, maximal models should not be fit blindly, especially when there is not enough data to estimate parameters.
+\item For small datasets we often see degenerate variance covariance estimates (with correlation $\pm 1$). Many researchers ignore this degeneracy but they should not.
+\item E.g., if the correlation is theoretically interesting, one should not ignore the degeneracy of the variance matrices. 
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}\frametitle{Summary so far}
+
+
+\begin{itemize}
+\item You will find a split in attitude between psychologists and linguists, who are taught to only look to see if the p-value is less than 0.05 or not, and statisticians, who want to express, using the most parsimonious model possible, how the data were generated.
+\item As I showed in week 1, the p-value is not only a completely useless measure (it answers a question we don't even care about), it is actually harmful (leads to incorrect inferences---think low power, Type S and M errors).
+\item One point I want to get across in this course is that our goal is to build the best model of the data that we can. ``Hypothesis testing'' will be based on our best estimates of the parameter of interest, given data and whatever prior knowledge we can bring to the table.
+\end{itemize}
+
+\end{frame}
+
+\section{Frequentist vs Bayesian methods}
+
+\begin{frame}\frametitle{The frequentist approach}
+
+\begin{enumerate}
+\item
+In the frequentist setting, we start with a dependent measure $y$, for which we assume a probability model. 
+\item
+In the above example, we have reading time data, $\mathrm{rt}$, which we assume is generated from a normal distribution with some mean $\mu$ and variance 
+$\sigma^2$; we write this 
+$\mathrm{rt} \sim N(\mu,\sigma^2)$. 
+\item
+Given a particular set of parameter values $\mu$ and $\sigma^2$, we could state the probability distribution of $\mathrm{rt}$ given the parameters. We can write this as 
+$p(\mathrm{rt}\mid \mu,\sigma^2)$.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}\frametitle{The frequentist approach}
+
+\begin{enumerate}
+\item
+In reality, we know neither $\mu$ nor $\sigma^2$.
+The goal of fitting a model to such data is to estimate the two parameters, and then to draw inferences about what the true value of $\mu$ is. 
+\item
+The frequentist method relies on the fact that, under repeated sampling and with a large enough sample size, the sampling distribution the sample mean $\bar{X}$ is distributed as $N(\mu,\sigma^2/n)$. 
+\item
+The standard method is to use the sample mean $\bar{x}$ as an estimate of $\mu$ and given a large enough sample size $n$, we can compute an approximate 95\% confidence interval $\bar{x} \pm 2\times (\hat\sigma^2/n)$.  
+\end{enumerate}
+\end{frame}
+
+\begin{frame}\frametitle{The frequentist approach}
+
+The 95\% confidence interval has a slightly complicated interpretation: 
+
+If we were to repeatedly carry out the experiment and compute a confidence interval each time using the above procedure, 95\% of those confidence intervals would contain the true parameter value $\mu$ (assuming, of course, that all our model assumptions are satisfied). 
+
+The \textbf{particular} confidence interval we calculated for our \textbf{particular} sample does not give us a range such that we are 95\% certain that the true $\mu$ lies within it, although this is how most users of statistics seem to (mis)interpret the confidence interval. 
+
+\textbf{See Richard Morey's work on confidence intervals for more}.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The 95\% CI}
+
+<<echo=FALSE,fig.height=4>>=
+se <- function(x)
+      {
+        y <- x[!is.na(x)] # remove the missing values, if any
+        sqrt(var(as.vector(y))/length(y))
+}
+
+
+ci <- function (scores){
+m <- mean(scores,na.rm=TRUE)
+stderr <- se(scores)
+len <- length(scores)
+upper <- m + qt(.975, df=len-1) * stderr 
+lower <- m + qt(.025, df=len-1) * stderr 
+return(data.frame(lower=lower,upper=upper))
+}
+
+## sample repeatedly:
+lower <- rep(NA,100)
+upper <- rep(NA,100)
+
+for(i in 1:100){ 
+  sample <- rnorm(100,mean=60,sd=4)
+  lower[i] <- ci(sample)$lower
+  upper[i] <- ci(sample)$upper
+}
+  
+cis <- cbind(lower,upper)
+
+store <- rep(NA,100)
+
+pop.mean<-60
+pop.sd<-4
+
+for(i in 1:100){ 
+  sample <- rnorm(100,mean=pop.mean,sd=pop.sd)
+  lower[i] <- ci(sample)$lower
+  upper[i] <- ci(sample)$upper
+  if(lower[i]<pop.mean & upper[i]>pop.mean){
+    store[i] <- TRUE} else {
+      store[i] <- FALSE}
+}
+
+## need this for the plot below:
+cis <- cbind(lower,upper)
+
+## convert store to factor:
+store<-factor(store)
+
+main.title<-"95% CIs in 100 repeated samples"
+
+line.width<-ifelse(store==FALSE,2,1)
+cis<-cbind(cis,line.width)
+x<-0:100
+y<-seq(55,65,by=1/10)
+plot(x,y,type="n",xlab="i-th repeated sample",ylab="Scores",main=main.title)
+abline(60,0,lwd=2)
+x0<-x
+x1<-x
+arrows(x0,y0=cis[,1],
+       x1,y1=cis[,2],length=0,lwd=cis[,3])
+@
+
+\end{frame}
+
+\begin{frame}\frametitle{The Bayesian approach}
+
+\begin{enumerate}
+\item
+The Bayesian approach starts with a probability model that expresses our prior knowledge about the possible values that the parameters $\mu$ and $\sigma^2$ might have. 
+\item
+This probability model expresses what we know so far about these two parameters (we may not know much, but in practical situations, it is not the case that we don't know \textit{anything} about their possible values). 
+\item
+Given this prior distribution, 
+the probability model $p(y\mid \mu,\sigma^2)$ and the data $y$ allow us to compute the probability distribution of the parameters given the data, $p(\mu,\sigma^2\mid y)$.  
+\item
+This probability distribution, called the \textbf{posterior distribution}, is what we use for inference. 
+\end{enumerate}
+
+\end{frame}
+
+
+\begin{frame}\frametitle{The Bayesian approach}
+
+\begin{enumerate}
+\item
+Unlike the 95\% confidence interval, we can define a 95\% \textbf{credible interval} that represents the range within which we are 95\% certain that \textbf{the true value of the parameter lies}, given the prior and the data at hand. 
+\item
+Note that in the frequentist setting, the parameters are point values: $\mu$ is assumed to have a particular value in nature.  
+\item
+In the Bayesian setting, $\mu$ has a probability distribution; it has a mean, but there is also some uncertainty associated with its true value.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}\frametitle{The Bayesian approach}
+
+Bayes' theorem makes it possible to derive the posterior distribution given the prior and the data. The conditional probability rule in probability theory (see Kerns) is that the joint distribution of two random variables $p(\theta, y)$ is equal to $p(\theta \mid y)p(y)$. It follows that:
+
+\begin{equation}
+\begin{split}
+p(\theta,y) =& p(\theta \mid y)p(y) \\
+            =& p(y,\theta)  \quad (\hbox{because } p(\theta,y)=p(y,\theta))\\
+            =& p(y\mid \theta)p(\theta).
+\end{split}
+\end{equation}
+
+The first and third lines in the equalities above imply that
+
+\begin{equation}
+p(\theta \mid y)p(y) = p(y\mid \theta)p(\theta)
+\end{equation}
+
+\end{frame}
+
+\begin{frame}\frametitle{The Bayesian approach}
+
+Dividing both sides by $p(y)$ we get:
+\begin{equation}
+p(\theta \mid y) = \frac{p(y\mid \theta)p(\theta)}{p(y)}
+\end{equation}
+
+The term $p(y\mid \theta)$ is the probability of the data given $\theta$. If we treat this as a function of $\theta$, we have the \textbf{likelihood function}. 
+
+Since $p(\theta \mid y)$ is the posterior distribution of $\theta$ given $y$, and $p(y\mid \theta)$ the likelihood, and $p(\theta)$ the prior, the following relationship is established:
+
+\begin{equation}
+\hbox{Posterior} \propto \hbox{Likelihood} \times \hbox{Prior}
+\end{equation}
+
+\end{frame}
+
+\begin{frame}\frametitle{The Bayesian approach}
+
+\begin{equation}
+\hbox{Posterior} \propto \hbox{Likelihood} \times \hbox{Prior}
+\end{equation}
+
+We ignore the denominator $p(y)$ here because it only serves as a normalizing constant that renders the left-hand side (the posterior) a probability distribution (makes the area under the curve sum to 1).
+
+The above is Bayes' theorem, and is the basis for determining the posterior distribution given a prior and the likelihood. 
+
+The rest of this course simply unpacks this idea.
+
+Next week, we will look at some simple examples of the application of Bayes' theorem.
+
+\end{frame}
+
+\end{document}
