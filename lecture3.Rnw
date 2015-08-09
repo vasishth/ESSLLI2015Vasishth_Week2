@@ -1,0 +1,1229 @@
+\documentclass[red]{beamer}
+
+\usepackage{mathtools}
+\makeatletter
+\newcommand{\explain}[2]{\underset{\mathclap{\overset{\uparrow}{#2}}}{#1}}
+\newcommand{\explainup}[2]{\overset{\mathclap{\underset{\downarrow}{#2}}}{#1}}
+\makeatother
+
+
+\usetheme{Antibes}
+\usecolortheme{lily}
+
+%\usepackage{gb4e}
+
+%\usepackage{color}
+
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+
+%\fvset{frame=single,framesep=1mm,fontfamily=courier,fontsize=\scriptsize,numbers=left,framerule=.3mm,numbersep=1mm,commandchars=\\\{\}}
+
+
+
+\usepackage[english]{babel}
+%\usepackage[latin1]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+
+\usepackage{mathptmx}
+\usepackage{amsthm}
+
+\usepackage{esint}
+
+\setbeamercovered{transparent}
+
+
+\title{Statistical methods for linguistic research: Advanced Tools}
+\author{Shravan Vasishth}
+\institute{Department of Linguistics\\
+University of Potsdam, Germany}
+
+\setbeamerfont{page number in head/foot}{size=\large}
+\setbeamertemplate{footline}[frame number]
+
+
+\begin{document}
+
+
+<<setup,include=FALSE,cache=FALSE>>=
+library(knitr)
+library(coda)
+
+# set global chunk options, put figures into folder
+options(replace.assign=TRUE,show.signif.stars=FALSE)
+opts_chunk$set(fig.path='figures/figure-', fig.align='center', fig.show='hold')
+options(replace.assign=TRUE,width=75)
+opts_chunk$set(dev='postscript')
+library(lme4)
+@
+
+\frame{\titlepage}
+
+\section{Introduction}
+
+\begin{frame}\frametitle{Today's goals}
+
+In this third lecture, my goal is to 
+
+\begin{enumerate}
+\item
+present two simple examples of how linear mixed models can be fit in JAGS.
+\item
+show how the same models could be fit in Stan.
+\end{enumerate}
+\end{frame}
+
+\section{Bayesian LMMs using JAGS}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 1: Set up data}
+
+Set up data for JAGS (and Stan). The data must be a list containing vectors.
+
+<<echo=FALSE>>=
+data<-read.table("data/gibsonwu2012data.txt",header=T)
+
+## take reciprocal rt to normalize residuals:
+data$rrt<- -1000/data$rt
+## define predictor x:
+data$x <- ifelse(
+  data$type%in%c("subj-ext"),-1,1)
+headnoun<-subset(data,region=="headnoun")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 1: Set up data}
+
+<<>>=
+## data for JAGS and Stan:
+headnoun.dat <- list(subj=
+                as.integer(factor(headnoun$subj) ),
+                     item=as.integer(factor(headnoun$item)),
+                    rrt = headnoun$rrt,
+                    x = headnoun$x,
+                    I = nrow(headnoun),
+                    J =length( unique(headnoun$subj) ),
+                    K =length( unique(headnoun$item)))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model}
+
+\begin{enumerate}
+\item
+We literally write out the model that is assumed to have generated the data:
+
+\begin{equation}\label{eq:ranslp2}
+\mathrm{RT}_{i} = \beta_0 + u_{0j} + w_{0k} + (\beta_1 + u_{1j} + w_{1k}) \hbox{x}_i + \epsilon_i
+\end{equation}
+
+\begin{equation}
+\begin{pmatrix}
+  u_{0j} \\ 
+  u_{1j} 
+\end{pmatrix}
+\sim 
+N\left(
+\begin{pmatrix}
+  0 \\
+  0
+\end{pmatrix},
+\Sigma_{u}
+\right)  
+\quad 
+\begin{pmatrix}
+  w_{0k} \\ 
+  w_{1k} \\
+\end{pmatrix}
+\sim 
+N \left(
+\begin{pmatrix}
+  0 \\
+  0
+\end{pmatrix},
+\Sigma_{w}
+\right)  
+\end{equation}
+
+\begin{equation}
+\epsilon_i \sim N(0,\sigma^2)
+\end{equation}
+\item
+We will also need to define priors for  
+the parameters $\beta_0, \beta_1, \Sigma_u, \Sigma_w, \sigma$.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}\frametitle{Variance vs Precision}
+
+As discussed earlier, in JAGS, instead of variance, we talk about precision, which is the \textbf{inverse} of variance. So we can write the variance components as follows.
+
+\begin{equation}
+\begin{pmatrix}
+  u_{0j} \\ 
+  u_{1j} 
+\end{pmatrix}
+\sim 
+N\left(
+\begin{pmatrix}
+  0 \\
+  0
+\end{pmatrix},
+\Omega_{u}
+\right)  
+\quad 
+\begin{pmatrix}
+  w_{0k} \\ 
+  w_{1k} \\
+\end{pmatrix}
+\sim 
+N \left(
+\begin{pmatrix}
+  0 \\
+  0
+\end{pmatrix},
+\Omega_{w}
+\right)  
+\end{equation}
+
+\begin{equation}
+\epsilon_i \sim N(0,\tau^2)
+\end{equation}
+
+Here, $\Omega_u=\Sigma_u^{-1}$, $\Omega_w=\Sigma_w^{-1}$, and $\tau=\frac{1}{\sigma^2}$. 
+
+$\Sigma_u^{-1}$ is the \textbf{inverse} of $\Sigma_u$, and yields a precision matrix. We will define priors on the precision matrix rather than the variance-covariance matrix.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Looking ahead}
+
+Our goal will be to determine the \textbf{posterior distribution} of $\beta_1$, which is the estimate of the effect of relative clause type.
+
+Gibson and Wu expect $\beta_1$ to be negative and significantly different from 0. To anticipate the result, using a uniform prior for $\beta_1$, what we will get (in the \textbf{reciprocal rt} scale) is:
+
+\includegraphics[height=5cm]{gibsonwuposterior}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model}
+
+\small
+First, write out how the data are assumed to be generated.
+
+\begin{equation}
+\mu_i = \beta_0 + {\textcolor{red}{u_{0j}}} + {\textcolor{red}{w_{0k}}} 
++ (\beta_1 + {\textcolor{red}{u_{1j}}} + {\textcolor{red}{w_{1k}}}) \hbox{x}_i
+\end{equation}
+
+\begin{equation}
+rrt_i \sim N(\mu_i,\sigma_e^2)
+\end{equation}
+
+
+\begin{Verbatim}
+    # Define model for each observational unit
+    for( i in 1:N )
+{
+    mu[i] <- ( beta[1] + u[subj[i],1] + w[item[i],1]) 
++ ( beta[2] + u[subj[i],2] + w[item[i],2]) * ( x[i] ) 
+    rrt[i] ~ dnorm( mu[i], tau.e )
+}
+\end{Verbatim}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model}
+
+\begin{equation}
+\begin{pmatrix}
+  u_{0j} \\ 
+  u_{1j} 
+\end{pmatrix}
+\sim 
+N\left(
+\begin{pmatrix}
+  0 \\
+  0
+\end{pmatrix},
+\Sigma_{u}
+\right)  \quad \Omega_u = \Sigma_u^{-1}
+\end{equation}
+
+\begin{verbatim}
+data
+{    zero[1] <- 0
+    zero[2] <- 0
+}
+    # Intercept and slope for each subj
+    for( j in 1:J )
+{
+    u[j,1:2] ~ dmnorm(zero,Omega.u)
+}    
+\end{verbatim}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model}
+
+\begin{equation}
+\begin{pmatrix}
+  w_{0k} \\ 
+  w_{1k} \\
+\end{pmatrix}
+\sim 
+N \left(
+\begin{pmatrix}
+  0 \\
+  0
+\end{pmatrix},
+\Sigma_{w}
+\right)  \quad \Omega_w = \Sigma_w^{-1}
+\end{equation}
+\begin{verbatim}
+    # Intercept and slope for each item
+    for( k in 1:K )
+{
+    w[k,1:2] ~ dmnorm(zero,Omega.w)
+}
+\end{verbatim}
+
+<<echo=FALSE>>=
+cat("
+data
+{
+    zero[1] <- 0
+    zero[2] <- 0
+}
+    model
+{
+    # Intercept and slope for each subj
+    for( j in 1:J )
+{
+    u[j,1:2] ~ dmnorm(zero,Omega.u)
+}    
+    # Intercept and slope for each item
+    for( k in 1:K )
+{
+    w[k,1:2] ~ dmnorm(zero,Omega.w)
+}
+    # Define model for each observational unit
+    for( i in 1:I )
+{
+    mu[i] <- ( beta[1] + u[subj[i],1] + w[item[i],1]) +
+    ( beta[2] + u[subj[i],2] +  w[item[i],2]) * ( x[i] ) 
+    rrt[i] ~ dnorm( mu[i], tau.e )
+}
+    # Priors:   
+    # Fixed intercept and slope (uninformative)
+    beta[1] ~ dnorm(0.0,1.0E-5)
+    beta[2] ~ dnorm(0.0,1.0E-5)
+    # Residual variance
+    tau.e <- pow(sigma.e,-2)
+    sigma.e  ~ dunif(0,100)    
+    # Define prior for the variance-covariance matrix of the random effects for subjects
+    ## precision:
+    Omega.u  ~ dwish( R.u, 2 )
+    ## R matrix:
+    R.u[1,1] <- pow(sigma.a,2)
+    R.u[2,2] <- pow(sigma.b,2)
+    R.u[1,2] <- rho.u*sigma.a*sigma.b
+    R.u[2,1] <- R.u[1,2]
+    ## Vcov matrix:
+    Sigma.u <- inverse(Omega.u)
+    ## priors for var int. var slopes
+    sigma.a ~ dunif(0,10)
+    sigma.b ~ dunif(0,10)  
+    ## prior for correlation:
+    rho.u ~ dunif(-1,1)
+    # Between-item variation
+    Omega.w  ~ dwish( R.w, 2 )
+    ## R matrix:
+    R.w[1,1] <- pow(sigma.c,2)
+    R.w[2,2] <- pow(sigma.d,2)
+    R.w[1,2] <- rho.w*sigma.c*sigma.d
+    R.w[2,1] <- R.w[1,2]
+    ## Vcov matrix:
+    Sigma.w <- inverse(Omega.w)
+    ## priors for var int. var slopes
+    sigma.c ~ dunif(0,10)
+    sigma.d ~ dunif(0,10)  
+    ## prior for correlation:
+    rho.w ~ dunif(-1,1)
+}",
+     file="gwmaximal.jag" )
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model (priors for fixed effect coefficients)}
+
+\begin{equation}
+\beta_0 \sim N(\mu=0,\sigma^2=1.0\times 10^5) \quad
+\beta_1 \sim N(\mu=0,\sigma^2=1.0\times 10^5)
+\end{equation}
+
+Recall that in JAGS $\sigma^2$ is expressed as precision $\tau=\frac{1}{\sigma^2}$:
+
+\begin{verbatim}
+    # Priors:   
+    # Fixed intercept and slope (weakly informative)
+    beta[1] ~ dnorm(0.0,1.0E-5)
+    beta[2] ~ dnorm(0.0,1.0E-5)
+\end{verbatim}
+
+These priors express a belief that the $\beta$ are likely to be centered around 0 (Note: not reasonable for $\beta_0$), but that we are very unsure about this.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model (priors for variance components)}
+
+\begin{equation}
+\sigma^2 \sim Uniform(0,100)
+\end{equation}
+
+\begin{verbatim}
+    # Residual variance
+    tau.e <- sigma.e^(-2)
+    sigma.e  ~ dunif(0,100)
+\end{verbatim}    
+
+Note: in JAGS, another way to write sigma.e to the power of -2 is
+
+\begin{verbatim}
+pow(sigma.e,-2)
+\end{verbatim}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model (priors for variance components)}
+
+\begin{itemize}
+\item
+$\Sigma_u$ and $\Sigma_w$ can be expressed as precision matrices by inverting them: $\Sigma_u^{-1}=\Omega_u$ and $\Sigma_w^{-1}=\Omega_w$.
+\item
+We will define a Wishart distribution as a prior for $\Omega_u$ and $\Omega_w$.
+\item
+The Wishart is the multivariate version of the gamma distribution and is a reasonable prior for precision matrices (see references at the end of these slides for more details).
+\item
+The prior will be Wishart(R,2), where R is an initial guess at a variance-covariance matrix, and 2 is the number of dimensions of the matrix:
+
+$\Omega_u \sim Wishart(R_u,2)$
+
+$\Omega_w \sim Wishart(R_w,2)$
+
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model (priors for variance components)}
+
+The steps for defining the prior for the precision matrix are:
+
+\begin{enumerate}
+\item
+State that $\Omega_u \sim Wishart(R_u, 2)$
+\item
+Create $R_u$ by filling in each cell.
+\item 
+Define priors for each parameter used to build u $R_u$:
+
+\begin{equation}
+R_u = 
+\left[ \begin{array}{cc}
+\sigma_{\mathrm{u0}}^2 & \rho_u \, \sigma_{u0} \sigma_{u1}  \\
+\rho_u \, \sigma_{u0} \sigma_{u1} & \sigma_{u1}^2\end{array} \right]
+\end{equation}
+\begin{enumerate}
+\item
+$\sigma_{\mathrm{u0}} \sim Uniform(0,10)$
+\item
+$\sigma_{\mathrm{u1}} \sim Uniform(0,10)$
+\item
+$\rho_u \sim Uniform(-1,1)$.
+\end{enumerate}
+\end{enumerate}
+
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model (priors for variance components)}
+
+%\begin{equation}
+%\left[ \begin{array}{cc}
+%sigma.a^2 & rho.u\, sigma.a\, sigma.b  \\
+%rho.u\, sigma.a\, sigma.b & sigma.b^2\end{arra%y} \right]
+%\end{equation}
+
+\begin{Verbatim}
+    ## Prior on precision:
+    Omega.u  ~ dwish( R.u, 2 )
+    ## Fill in R matrix:
+    R.u[1,1] <- sigma.a^2
+    R.u[2,2] <- sigma.b^2
+    R.u[1,2] <- rho.u*sigma.a*sigma.b
+    R.u[2,1] <- rho.u*sigma.a*sigma.b
+    ## Prior for varying intercepts sd:
+    sigma.a ~ dunif(0,10)
+    ## prior for varying slopes sd:
+    sigma.b ~ dunif(0,10)  
+    ## prior for correlation:
+    rho.u ~ dunif(-1,1)
+\end{Verbatim}    
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 2: Define model}
+
+See R code accompanying these lectures for full model specification in JAGS.
+
+Also see this tutorial article on Stan (to be discussed later in this course):
+http://www.ling.uni-potsdam.de/$\sim$vasishth/statistics/BayesLMMs.html
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 3: Fit model}
+
+Decide which variables you want to track the posterior distribution of.
+
+<<>>=
+track.variables<-c("beta","sigma.e",
+                   "sigma.a","sigma.b",
+                   "sigma.c","sigma.d",
+                   "rho.u","rho.w")
+@
+
+<<>>=
+library(rjags)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 3: Fit model}
+
+
+<<>>=
+headnoun.mod <- jags.model( 
+  file="gwmaximal.jag",
+  data = headnoun.dat,
+  n.chains = 4,
+  n.adapt =2000 , quiet=T)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 4: Generate posterior samples}
+
+<<>>=
+headnoun.res <- coda.samples(headnoun.mod,
+                var = track.variables,
+                n.iter = 10000,
+                thin = 1)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 4: Generate posterior samples}
+
+<<>>=
+summary(headnoun.res)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 4: Generate posterior samples}
+
+<<>>=
+## not plotted
+#plot(headnoun.res)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Frequentist LMM}
+\framesubtitle{Comparison with lmer}
+
+<<>>=
+m0<-lmer(rrt~x + (1+x|subj)+(1+x|item),headnoun)
+m1<-lmer(rrt~x + (1+x|subj)+(1|item),headnoun)
+m2<-lmer(rrt~x + (1|subj)+(1|item),headnoun)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Frequentist LMM}
+\framesubtitle{Comparison with lmer}
+
+\small
+<<>>=
+anova(m1,m2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Frequentist LMM}
+\framesubtitle{Comparison with lmer}
+
+<<>>=
+summary(m0)$coef[2,1] - 2 * summary(m0)$coef[2,2]
+summary(m0)$coef[2,1] + 2 * summary(m0)$coef[2,2]
+@
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 5: Inference}
+
+<<echo=FALSE,fig.height=4>>=
+mcmcChain<-as.matrix(headnoun.res)
+#head(round(mcmcChain,digits=3))
+hist(mcmcChain[,2],freq=F,main="Posterior distribution",xlab=expression(beta[2]))
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 5: Inference}
+
+<<>>=
+mean(mcmcChain[,2]<0)
+@
+
+\end{frame}
+
+%%xxxx
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 5: Inference}
+
+<<fig.height=4>>=
+op<-par(mfrow=c(1,2),pty="s")
+hist(mcmcChain[,3],freq=F,main="rho.u")
+hist(mcmcChain[,4],freq=F,main="rho.w")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Step 5: Inference}
+
+<<>>=
+## posterior probability of beta_1 < 0
+## given data:
+(meanbeta1<-mean(mcmcChain[,2]<0))
+@
+
+The conclusion here is that Gibson and Wu's claim seems to be weakly supported by the data: there is a \Sexpr{round(meanbeta1,digits=2)} probability of $\beta_1$ being less than 0. 
+
+Lack of power (here, small sample size) and replicability are still the key issues.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+
+Checking convergence:
+
+\begin{itemize}
+\item
+The Gelman-Rubin (or Brooks-Gelman-Rubin) diagnostic involves sampling from multiple chains and then comparing between and within group variability. It's analogous to the F-score in anova.
+\item
+Within variance is represented by the mean width of the 95\% posterior Credible Intervals (CrI) of all chains, from the final T iterations.  
+\item
+Between variance is represented by the width of the 95\% CrI using all chains pooled together (for the T iterations). If the ratio $\hat{R}=B/W$ is approximately 1, we have convergence.
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+
+Checking convergence:
+
+<<echo=TRUE>>=
+gelman.diag(headnoun.res)
+@
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Comparison of lmer and JAGS fit}
+
+\begin{tabular}{rrr}
+\hline
+Parameter estimate & lmer & JAGS\\
+\hline
+$\hat\beta_0$ & -2.67 (0.14) & -2.68 (0.13)\\ 
+%-2.69 (0.11)\\
+$\hat\beta_1$ & -0.08 (0.10) &  
+-0.08 (0.10)\\
+%-0.09 (0.10) \\
+$\hat\sigma_{subj,int}$ & 0.61 & 
+0.78\\
+%0.02 \\ 
+$\hat\sigma_{subj,sl}$ & 0.23 & 
+0.20\\
+%0.01 \\
+$\hat\rho_{subj}$ & -0.51 & 
+-0.09 (0.55)\\
+%-0.02 (0.47) \\
+$\hat\sigma_{item,int}$ & 0.33 & 
+0.39 \\
+%0.01\\
+$\hat\sigma_{item,sl}$ & 0.10 & 
+0.19\\
+%0.01\\ 
+$\hat\rho_{item}$ & \textbf{1.00*} & 
+-0.11 (0.58)\\
+%-0.07 (0.49)\\ 
+\hline
+\end{tabular}
+
+* degenerate var-cov matrix, one reason why you should not fit a maximal model here with lmer. 
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{The posterior distributions of the correlations}
+
+<<echo=FALSE,fig.height=5,fig.width=7>>=
+op<-par(mfrow=c(1,2),pty="s")
+hist(mcmcChain[,3],main=expression(rho[u]),
+     xlab="")
+hist(mcmcChain[,4],main=expression(rho[w]),xlab="")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{What to do about $\pm 1$ correlation estimates?}
+\framesubtitle{Suggestion from Chung et al (unpublished MS)}
+
+<<echo=FALSE,fig.height=4>>=
+op<-par(mfrow=c(1,2),pty="s")
+
+x<-seq(0,100,by=0.01)
+plot(x,dgamma(x,1.5,10^(-4)),type="l",main="Prior for sd")
+
+x<-seq(-1,1,by=0.01)
+rho<-dnorm(x)
+plot(x,rho,type="l",main="Prior for correlation")
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Model with regularization for correlation}
+
+The only innovation now is to have more informative priors for correlations.
+
+We write a new model (see gwmaximal2.jag in accompanying R code).
+
+<<echo=FALSE>>=
+cat("
+data
+{
+    zero[1] <- 0
+    zero[2] <- 0
+}
+    model
+{
+    # Intercept and slope for each person, including random effects
+    for( j in 1:J )
+{
+    u[j,1:2] ~ dmnorm(zero,Omega.u)
+}    
+    # Random effects for each item
+    for( k in 1:K )
+{
+    w[k,1:2] ~ dmnorm(zero,Omega.w)
+}
+    
+    # Define model for each observational unit
+    for( i in 1:I )
+{
+    mu[i] <- ( beta[1] + u[subj[i],1] ) +
+    ( beta[2] + u[subj[i],2] +  w[item[i],2]) * ( x[i] ) + w[item[i],1]
+    rrt[i] ~ dnorm( mu[i], tau.e )
+}
+    # Priors:   
+    # Fixed intercept and slope (uninformative)
+    beta[1] ~ dnorm(0.0,1.0E-5)
+    beta[2] ~ dnorm(0.0,1.0E-5)
+    # Residual variance
+    tau.e <- pow(sigma.e,-2)
+    sigma.e  ~ dunif(0,100)    
+    ## By subjects:
+    Omega.u  ~ dwish( R.u, 2 )
+    ## R matrix:
+    R.u[1,1] <- pow(sigma.a,2)
+    R.u[2,2] <- pow(sigma.b,2)
+    R.u[1,2] <- rho.u*sigma.a*sigma.b
+    R.u[2,1] <- R.u[1,2]
+    ## Vcov matrix:
+    Sigma.u <- inverse(Omega.u)
+    ## priors for var int. var slopes
+    tau.a ~ dgamma(1.5,10^(-4))
+    tau.b ~ dgamma(1.5,10^(-4))
+    sigma.a <- 1/pow(tau.a,1/2)
+    sigma.b <- 1/pow(tau.b,1/2)
+    ## prior for correlation:
+#    rho.u2 ~ dbeta(1.5,1.5)
+#    rho.u <- (2 * rho.u2) - 1
+     ## truncated normal:
+     rho.u ~ dnorm(0,1)T(-1,1)
+# Between-item variation
+    Omega.w  ~ dwish( R.w, 2 )
+    ## R matrix:
+    R.w[1,1] <- pow(sigma.c,2)
+    R.w[2,2] <- pow(sigma.d,2)
+    R.w[1,2] <- rho.w*sigma.c*sigma.d
+    R.w[2,1] <- R.w[1,2]
+    ## Vcov matrix:
+    Sigma.w <- inverse(Omega.w)
+    ## priors for var int. var slopes
+    tau.c ~ dgamma(1.5,10^(-4))
+    tau.d ~ dgamma(1.5,10^(-4))
+    sigma.c <- 1/pow(tau.c,1/2)
+    sigma.d <- 1/pow(tau.d,1/2)
+    ## prior for correlation:
+#    rho.w2 ~ dbeta(1.5,1.5)
+#    rho.w <- (2 * rho.w2) - 1
+     rho.w ~ dnorm(0,1)T(-1,1)
+}",
+     file="gwmaximal2.jag" )
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Run model}
+
+<<cache=TRUE>>=
+headnoun.mod2 <- jags.model( 
+  file="gwmaximal2.jag",
+  data = headnoun.dat,
+  n.chains = 4,
+  n.adapt =2000 , quiet=T)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Generate posterior samples}
+
+
+<<cache=TRUE>>=
+headnoun.res2 <- coda.samples(headnoun.mod2,
+                var = track.variables,
+                n.iter = 10000,
+                thin = 20)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Plot posterior distributions}
+
+You would need to have a lot of data to shift the posterior for the $\rho$ away from 0, but you could do that, in principle.
+
+<<echo=FALSE>>=
+MCMCchain<-as.matrix(headnoun.res2)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Plot posterior distributions}
+
+<<echo=FALSE,fig.height=3,fig.width=6>>=
+par( mfrow=c(1,3) )
+hist(MCMCchain[,2],xlab=expression(beta[1]),main="",freq=FALSE)
+hist(MCMCchain[,3],xlab=expression(rho[u]),main="",freq=FALSE)
+hist(MCMCchain[,4],xlab=expression(rho[w]),main="",freq=FALSE)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Probability of $\beta_1 <0$}
+
+<<echo=FALSE,fig.height=3>>=
+hist(MCMCchain[,2],
+     xlab=expression(beta[1]),freq=FALSE,main="")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Bayesian LMM}
+\framesubtitle{Probability of $\beta_1 <0$}
+
+<<echo=FALSE>>=
+MCMCchain<-as.matrix(headnoun.res2)
+@
+
+<<>>=
+mean(MCMCchain[,2]<0)
+@
+
+Thus, \textit{given this data-set}, there is some reason to believe that $\beta_1$ is less than 0, as predicted by Gibson and Wu.
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Comparison of lmer and JAGS fit (model 2)}
+
+\begin{tabular}{rrr}
+\hline
+Parameter estimate & lmer & JAGS\\
+\hline
+$\hat\beta_0$ & -2.67 (0.14) & -2.69 (0.11)\\
+$\hat\beta_1$ & -0.08 (0.10) &  -0.09 (0.10) \\
+$\hat\sigma_{subj,int}$ & 0.61 & 0.02 \\ 
+$\hat\sigma_{subj,sl}$ & 0.23 & 0.01 \\
+$\hat\rho_{subj}$ & -0.51 & -0.02 (0.47) \\
+$\hat\sigma_{item,int}$ & 0.33 & 0.01\\
+$\hat\sigma_{item,sl}$ & 0.10 & 0.01\\ 
+$\hat\rho_{item}$ & \textbf{1.00*} & -0.07 (0.49)\\ 
+\hline
+\end{tabular}
+
+* degenerate var-cov matrix
+
+\end{frame}
+
+\section{Using informative priors}
+
+\begin{frame}[fragile]\frametitle{Why ignore prior knowledge?}
+
+Suppose (just hypothetically) that you have good reason to believe (based on theory or data) that 
+
+$\beta_1 \sim N(\mu=0.10,\sigma^2=0.10^2)$
+
+We can take this prior knowledge into account in the model by simply making this our prior for $\beta_1$.
+
+<<echo=FALSE>>=
+cat("
+data
+{
+    zero[1] <- 0
+    zero[2] <- 0
+}
+    model
+{
+    # Intercept and slope for each person, including random effects
+    for( j in 1:J )
+{
+    u[j,1:2] ~ dmnorm(zero,Omega.u)
+}    
+    # Random effects for each item
+    for( k in 1:K )
+{
+    w[k,1:2] ~ dmnorm(zero,Omega.w)
+}
+    
+    # Define model for each observational unit
+    for( i in 1:I )
+{
+    mu[i] <- ( beta[1] + u[subj[i],1] ) +
+    ( beta[2] + u[subj[i],2] +  w[item[i],2]) * ( x[i] ) + w[item[i],1]
+    rrt[i] ~ dnorm( mu[i], tau.e )
+}
+    # Priors:   
+    beta[1] ~ dnorm(0.0,1.0E-5)
+    beta[2] ~ dnorm(0.10,pow(0.10,-2))
+    # Residual variance
+    tau.e <- pow(sigma.e,-2)
+    sigma.e  ~ dunif(0,100)    
+    ## By subjects:
+    Omega.u  ~ dwish( R.u, 2 )
+    ## R matrix:
+    R.u[1,1] <- pow(sigma.a,2)
+    R.u[2,2] <- pow(sigma.b,2)
+    R.u[1,2] <- rho.u*sigma.a*sigma.b
+    R.u[2,1] <- R.u[1,2]
+    ## Vcov matrix:
+    Sigma.u <- inverse(Omega.u)
+    ## priors for var int. var slopes
+    tau.a ~ dgamma(1.5,10^(-4))
+    tau.b ~ dgamma(1.5,10^(-4))
+    sigma.a <- 1/pow(tau.a,1/2)
+    sigma.b <- 1/pow(tau.b,1/2)
+    ## prior for correlation:
+    rho.u ~ dnorm(0,1)T(-1,1)
+# Between-item variation
+    Omega.w  ~ dwish( R.w, 2 )
+    ## R matrix:
+    R.w[1,1] <- pow(sigma.c,2)
+    R.w[2,2] <- pow(sigma.d,2)
+    R.w[1,2] <- rho.w*sigma.c*sigma.d
+    R.w[2,1] <- R.w[1,2]
+    ## Vcov matrix:
+    Sigma.w <- inverse(Omega.w)
+    ## priors for var int. var slopes
+    tau.c ~ dgamma(1.5,10^(-4))
+    tau.d ~ dgamma(1.5,10^(-4))
+    sigma.c <- 1/pow(tau.c,1/2)
+    sigma.d <- 1/pow(tau.d,1/2)
+    ## prior for correlation:
+     rho.w ~ dnorm(0,1)T(-1,1)
+}",
+     file="gwmaximal3.jag" )
+
+headnoun.mod3 <- jags.model( 
+  file="gwmaximal3.jag",
+  data = headnoun.dat,
+  n.chains = 4,
+  n.adapt =2000 , quiet=T)
+
+headnoun.res3 <- coda.samples(headnoun.mod3,
+                var = track.variables,
+                n.iter = 10000,
+                thin = 20)
+
+MCMCchain<-as.matrix(headnoun.res3)
+@
+
+Here, the probability that $\beta_1<0$ given the data is only:
+
+<<>>=
+mean(MCMCchain[,2]<0)
+@
+
+Of course, with enough data, you could in principle shift the posterior distribution in either direction, i.e., change your belief in the face of enough evidence!
+\end{frame}
+
+
+
+
+\section{Meta-analyses}
+
+\begin{frame}[fragile]\frametitle{Meta-analyses}
+\framesubtitle{The controversy about Chinese relative clauses}
+
+\small
+\begin{center}
+\begin{tabular}{lrrrl}
+  \hline
+source & coef. & SE & n & method \\ 
+  \hline
+Gibson Wu 2012 & -123.20 & 46.84 &  36 & SPR \\ 
+Vasishth et al 2013 expt 3 & -109.40 & 54.80 &  40 & SPR \\ 
+Lin et al 2011 expt 1 & -100.00 & 30.00 &  48 & SPR \\ 
+ Lin et al 2011 expt 2 & -30.00 & 32.05 &  40 &  SPR \\ 
+Qiao et al 2012 expt 2 & -28.00 & 23.80 &  24 & LMaze  \\ 
+Qiao et al 2012 expt 1 & -16.00 & 44.26 &  32 & GMaze  \\ 
+Wu et al 2011  & 50.00 & 40.00 &  48 & SPR \\ 
+Hsiao and Gibson 2003  & 50.00 & 25.00 &  35 & SPR  \\ 
+Wu et al 2009  & 50.00 & 23.00 &  40 & SPR  \\ 
+Jaeger et al 2013 expt 1 & 55.62 & 65.14 &  49 & SPR \\
+Chen et al 2008 & 75.00 & 35.50 &  39 & SPR  \\ 
+Jaeger et al 2013 expt 2 & 81.92 & 36.25 &  49 & ET \\ 
+Vasishth et al 2013 expt 2 & 82.60 & 41.20 &  61 & SPR  \\ 
+Vasishth et al 2013 expt 1 & 148.50 & 50.90 &  60 & SPR \\
+   \hline
+\end{tabular}
+\end{center}
+
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Synthesizing the evidence}
+\framesubtitle{A Bayesian meta-analysis}
+\small
+\begin{enumerate}
+\item
+Let $Y_i$ be the effect size in the $i$-th study, where $i$ ranges from 1 to k (here, k=14). The unit is milliseconds; a positive sign means a subject relative advantage and a negative sign an object relative advantage.
+\item
+Let $d$ be the underlying effect size, to be estimated by the model.
+\item
+Let $v_i^2$ be the estimated within-study variance.
+\item
+Then, our model is:
+
+\begin{equation}
+Y_i \sim N(\delta_i, v_i^2) \quad i=1,\dots, k
+\end{equation}
+
+where 
+
+\begin{equation}
+\delta_i \sim N(d, \tau^2) \quad i=1,\dots, k
+\end{equation}
+
+\noindent
+The variance parameter $\tau^2$ represents between study variance. The prior for $\sqrt{\tau}$ could be a uniform distribution, or in inverse gamma.
+\end{enumerate}
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Synthesizing the evidence}
+\framesubtitle{A Bayesian meta-analysis}
+
+Plausible values of the subject/object relative clause advantage can be assumed to range between -300 and 300 ms. But we will assume three different levels of uncertainty: 
+ The 95\% credible intervals are 
+
+\begin{enumerate}
+\item 
+$(-1.96\times 100, 1.96\times 100)=(-196, 196)$;
+\item 
+$(-1.96\times 200, 1.96\times 200)=(-392, 392)$; and
+\item
+$(-1.96\times 300, 1.96\times 300)=(-588,588)$.
+\end{enumerate}
+
+We therefore try three priors for $d$: $N(0,\sigma^2)$, with $\sigma=100,200,300$. These priors correspond to an agnostic starting point with increasing levels of uncertainty about the range of plausible values for the relative clause processing difference. 
+
+\end{frame}
+
+\begin{frame}\frametitle{Synthesizing the evidence}
+\framesubtitle{Analysis with all the data}
+
+\begin{center}
+\includegraphics[height=6cm,width=6cm]{metaALL}
+\end{center}
+\end{frame}
+
+\begin{frame}\frametitle{Synthesizing the evidence}
+\framesubtitle{Analysis using existing data as prior}
+
+\begin{center}
+\includegraphics[height=6cm,width=6cm]{metaPRIOR}
+\end{center}
+\end{frame}
+
+\begin{frame}\frametitle{Synthesizing the evidence}
+\framesubtitle{Concluding remarks}
+
+Given existing evidence, even believers in the object-relative advantage for Chinese would have to be skeptical about their belief: Prob(Object Relative Advantage $\mid$ data)=\Sexpr{1-0.59} to \Sexpr{1-0.73}, depending on what prior we have.
+
+Two key advantages of Bayesian LMMs in this example are that 
+
+\begin{enumerate}
+\item
+We can assign a probability to our belief given the data. \textbf{Quantifying uncertainty is the central goal, not a binary reject-accept decision}.
+\item
+We can use prior knowledge in our analyses.
+\end{enumerate}
+\end{frame}
+
+
+\begin{frame}\frametitle{Fitting LMMs of greater complexity, using Stan}
+
+I will discuss the following papers if there is time:
+
+\begin{enumerate}
+\item Sorensen, Hohenstein, Vasishth, Bayesian Linear Mixed Models using Stan: A tutorial for psychologists, linguists, and cognitive scientists
+
+http://www.ling.uni-potsdam.de/$\sim$vasishth/statistics/BayesLMMs.html
+\item 
+Bates, Kliegl, Vasishth, Baayen, Parsimonious Mixed Models.
+ArXiv preprint: http://arxiv.org/abs/1506.04967
+\end{enumerate}
+
+\end{frame}
+
+
+
+\section{Further reading}
+
+\begin{frame}\frametitle{Our articles using Stan or JAGS}
+\tiny
+\begin{enumerate}
+\item
+Dario Paape and Shravan Vasishth. Local coherence and preemptive digging-in effects in German. Language and Speech, 2015. Accepted pending minor revisions. 
+\item
+Samar Husain, Shravan Vasishth, and Narayanan Srinivasan. Integration and prediction difficulty in Hindi sentence comprehension: Evidence from an eye-tracking corpus. Journal of Eye Movement Research, 8(2):1-12, 2015.
+\item
+Stefan L. Frank, Thijs Trompenaars, and Shravan Vasishth. Cross-linguistic differences in processing double-embedded relative clauses: Working-memory constraints or language statistics? submitted, 2015.
+\item Samar Husain, Shravan Vasishth, and Narayanan Srinivasan. Strong Expectations Cancel Locality Effects: Evidence from Hindi. PLoS ONE, 9(7):1-14, 2014.
+\item Philip Hofmeister and Shravan Vasishth. Distinctiveness and encoding effects in online sentence comprehension. page n/a, 2014. accepted in Frontiers Special Issue, http://journal.frontiersin.org/ResearchTopic/1545
+\item 
+Shravan Vasishth, Zhong Chen, Qiang Li, and Gueilan Guo. Processing Chinese Relative Clauses: Evidence for the Subject-Relative Advantage. PLoS ONE, 8(10):1-14, 10 2013. 
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}\frametitle{Recommended reading}
+
+\begin{enumerate}
+\item Lynch SM (2007) Introduction to applied Bayesian statistics and estimation for social scientists. Springer.
+\item
+Lunn et al.\ (2012) The BUGS book: A practical introduction to Bayesian analysis. CRC Press.
+\item Gelman A, \& Hill J (2007) Data analysis using regression and multilevel/hierarchical models. Cambridge, UK: Cambridge University Press.
+\item
+Lee, M.D., \& Wagenmakers, E.-J. (2013). Bayesian Cognitive Modeling: A Practical Course. Cambridge University Press.
+http://faculty.sites.uci.edu/mdlee/bgm/
+\item 
+Gelman, A., Carlin, J. B., Stern, H. S., \& Rubin, D. B. (2014). Bayesian data analysis (Vol. 2). London: Chapman \& Hall/CRC.
+\end{enumerate}
+
+You can also get a lot of help from the JAGS and Stan mailing lists.
+
+\end{frame}
+
+\begin{frame}\frametitle{In closing}
+
+\begin{enumerate}
+\item
+Don't be seduced by the illusion that computing p-values $\neq$ doing science.
+\item
+The first goal is to build a reasonable model for the data at hand. Inference is the next step.
+\item
+Aim for high power and replicability above all else.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}\frametitle{In closing}
+
+\begin{enumerate}
+\item
+Don't look for or blindly follow guidelines (except this one!), instead aim for developing understanding of statistical methods.
+\item
+It's not about Bayes vs Frequentist methods; both are useful depending on context. When you have a lot of data, Frequentist methods can be adequate. When you have sparse data,  Bayesian methods are very powerful. 
+\item 
+If you want flexibility in model specification, the Bayesian approach is the way to go.
+\item
+You can of course use Bayesian methods without exception, even for standard models. This is what I do.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}\frametitle{In closing}
+
+\begin{quote}
+``Do the best experiments you can, and always tell the truth. That's all.''
+
+\hfill Sydney Brenner
+\end{quote}
+
+\end{frame}
+
+\end{document}
+
+
+
