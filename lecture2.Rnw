@@ -40,7 +40,7 @@
 \setbeamercovered{transparent}
 
 
-\title{Lecture 2: Statistical methods for linguistic research: Advanced Tools}
+\title[lecture 2: examples of Bayesian models]{Statistical methods for linguistic research: Advanced Tools}
 \author{Shravan Vasishth}
 \institute{Department of Linguistics\\
 University of Potsdam, Germany}
@@ -71,11 +71,11 @@ opts_chunk$set(dev='postscript')
 
 \begin{frame}\frametitle{Today's goals}
 
-In this second lecture, my goals are to 
+In this lecture, my goals are to 
 
 \begin{enumerate}
 \item
-Give you a feeling for how Bayesian analysis works using two simple examples that need only basic mathematical operations (addition, subtraction, division, multiplication). 
+Give you a feeling for how Bayesian analysis works using five relatively simple examples. 
 \item 
 Start thinking about priors for parameters in preparation for fitting linear mixed models.
 \item
@@ -1112,6 +1112,7 @@ Note that: (a) with uniform priors, we get a Bayesian estimate equal to the MLE,
 
 <<fig.height=2>>=
 op<-par(mfrow=c(1,3),pty="s")
+library(coda)
 traceplot(beauty.res)
 @
 
@@ -1852,7 +1853,7 @@ track.variables<-c("beta0","beta1","sigma","y45")
 rats.mod <- jags.model( 
   file = "JAGSmodels/ratsexample2pred.jag",
                      data=data,
-                     n.chains = 1,
+                     n.chains = 2,
                       n.adapt =2000, quiet=T)
 
 rats.res <- coda.samples( rats.mod,
@@ -1876,7 +1877,7 @@ round(summary(rats.res)$statistics[,1:2],
 
 
 <<fig.height=4>>=
-traceplotplot(rats.res)
+traceplot(rats.res)
 @
 
 \end{frame}
@@ -1891,7 +1892,7 @@ In some cases Bayes' Theorem can be used analytically (Examples 1, 2)
 \item 
 It is relatively easy to define different kinds of Bayesian models using programming languages like JAGS.
 \item We saw some examples from linear models (Examples 3-5).
-\item Coming up next: Linear mixed models.
+\item Coming up next: MCMC sampling and then Linear Mixed Models.
 \end{enumerate}
 
 \end{frame}

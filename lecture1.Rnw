@@ -36,7 +36,7 @@
 \setbeamercovered{transparent}
 
 
-\title{Lecture 1: Statistical methods for linguistic research: Advanced Tools}
+\title[lecture 1: Introduction to LMMs and Bayes Theorem]{Statistical methods for linguistic research: Advanced Tools}
 \author{Shravan Vasishth}
 \institute{Department of Linguistics\\
 University of Potsdam, Germany}
@@ -72,7 +72,7 @@ The R library I use most is \texttt{lme4}.
 In recent years, very powerful programming languages have become available that make Bayesian modeling relatively easy. 
 \item Bayesian tools have several important advantages over frequentist methods, but they require some very specific background knowledge.
 \item
-My goal in this course is to try to provide that background knowledge.
+My goal in this course is to try to provide some of that background knowledge.
 \end{itemize}
 
 \end{frame}
@@ -106,7 +106,7 @@ Basic knowledge of R.
 \item For detailed derivations and more background theory, please see:
 \begin{enumerate}
 \item my linear modeling notes: https://github.com/vasishth/LM
-\item my Bayesian modeling notes: to-do
+\item my Bayesian modeling notes: https://github.com/vasishth/Statistics-lecture-notes-Potsdam/tree/master/AdvancedDataAnalysis
 \end{enumerate}
 
 \end{enumerate}
