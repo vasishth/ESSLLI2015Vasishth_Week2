@@ -468,7 +468,7 @@ Conclusion:
 It seems that lmer can estimate the correlation parameters just in case sample size for items and subjects is ``large enough'' (this can be established using simulation, as done above).
 \item
 Barr et al's recommendation to fit a maximal model makes sense only if it's already clear that we have enough data to estimate all the variance components and parameters. 
-\item That is rarely the case in psychology and linguistics, especially when we go to more complex designs than a simple two-condition study.
+\item But that is rarely the case in psychology and linguistics, especially when we go to more complex designs than a simple two-condition study (although we have just seen that even there it makes little sense).
 \end{enumerate}
 
 \end{frame}
@@ -482,6 +482,15 @@ Don't get hung up on whether a coefficient ``should'' vary by group. Just allow 
 \textbf{Practical concerns sometimes limit the feasible complexity of a model}--for example, we might fit a varying-intercept model first, then allow slopes to vary, then add group-level predictors, and so forth. Generally, however, \textbf{it is only the difficulties of fitting and, especially, understanding the models that keeps us from adding even more complexity, more varying coefficients, and more interactions}.
 \end{quote}
 \end{frame}
+
+\begin{frame}\frametitle{Keep it maximal?}
+
+Note Gelman and Hill's comment (2007, p.\ 549) presupposes that you are using Bayesian LMMs and not trying extract a p-value from an lmer model (in fact Gelman and Hill 2007 explicitly rejects NHST), but rather trying to fit the model that your data will support. 
+
+
+
+\end{frame}
+
 
 \section{Why fit Bayesian LMMs?}
 
