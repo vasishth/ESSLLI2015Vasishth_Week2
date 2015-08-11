@@ -82,7 +82,7 @@ Start thinking about priors for parameters in preparation for fitting linear mix
 Start fitting linear regression models in JAGS.
 \end{enumerate}
 
-I will assign some homework which is designed to help you understand these concepts. Solutions will be discussed next week.
+I will assign some homework which is designed to help you understand these concepts. Solutions are provided at the end of the exercise sheet so you can check them yourself.
 
 \end{frame}
 
@@ -184,7 +184,8 @@ We can also calculate the probability that X lies
 between 590 and 610: $Prob(590<X<610)$:
 
 <<>>=
-pnorm(610,mean=600,sd=sqrt(50))-pnorm(490,mean=600,sd=sqrt(50))
+pnorm(610,mean=600,sd=sqrt(50))-
+  pnorm(490,mean=600,sd=sqrt(50))
 @
 
 \end{frame}
@@ -341,7 +342,7 @@ round(qnorm(0.025,lower.tail=FALSE),digits=2)
 [b.] Solve for $\sigma$ in $Z=\frac{q-\mu}{\sigma}$. 
 \end{enumerate}
 
-We will use this fact in Homework 0.\label{hw0hint}
+We will use this fact in Problem 1.\label{hw0hint}
 \end{frame}
 
 \begin{frame}[fragile]\frametitle{Normal random variables}
@@ -377,7 +378,8 @@ Given x, and different values of $\mu$, we can determine which $\mu$ is most lik
 
 <<echo=FALSE,fig.height=3>>=
 mu<-seq(400,800,by=0.1)
-plot(mu,dnorm(x,mean=mu,sd=sqrt(50)),type="l")
+plot(mu,dnorm(x,mean=mu,sd=sqrt(50)),type="l",
+     ylab="")
 @
 
 \end{frame}
@@ -418,7 +420,7 @@ for some $\mu$ in $f(\cdot)=Normal(\mu,50)$.
 It's computationally easier to just take logs and sum them up (\textbf{log likelihood}):
 
 \begin{equation}
-\log f(x_1)+ \log f(x_2) \times \dots \times \log f(x_10)
+\log f(x_1)+ \log f(x_2) + \dots + \log f(x_10)
 \end{equation}
 
 <<>>=
@@ -432,7 +434,7 @@ sum(dnorm(x,mean=500,sd=sqrt(50),log=TRUE))
 
 We can now plot, for different values of $\mu$, the likelihood that each of the $\mu$ generated the 10 data points:
 
-<<fig.height=3>>=
+<<fig.height=2.5>>=
 mu<-seq(400,800,by=0.1)
 liks<-rep(NA,length(mu))
 for(i in 1:length(mu)){
@@ -486,7 +488,7 @@ Let X: no.\ successes in $n$ trials. We generally assume that
 $X\sim Binomial(n,\theta)$, $\theta$ unknown.
 
 \item
-Suppose we have 46 successes out of 100. We generally use the empirically observed proportion 46/100 as our estimate of $\theta$. I.e., we assume that the \textbf{generating distribution} is
+Suppose we have 46 successes out of 100. We generally use the empirically observed proportion 46/100 as our estimate of $\theta$. I.e., we assume that the generating distribution is
 
 $X\sim Binomial(n=100,\theta=.46)$.
 
@@ -548,6 +550,8 @@ We are going to plot
 
 \begin{enumerate}
 \item 
+Beta(a=1,b=1)
+\item 
 Beta(a=2,b=2)
 \item 
 Beta(a=3,b=3)
@@ -563,9 +567,16 @@ Beta(a=10,b=10)
 
 <<betas,echo=FALSE,fig.height=4>>=
 plot(function(x) 
-  dbeta(x,shape1=2,shape2=2), 0,1,
+  dbeta(x,shape1=1,shape2=1), 0,1,
       main = "Beta density",
               ylab="density",xlab="X",ylim=c(0,4))
+text(.5,.9,"a=1,b=1")
+
+
+plot(function(x) 
+  dbeta(x,shape1=2,shape2=2), 0,1,
+      main = "Beta density",
+              ylab="density",xlab="X",ylim=c(0,4),add=T)
 
 text(.5,1.3,"a=2,b=2")
 
@@ -591,6 +602,8 @@ Each successive density expresses increasing certainty about $\theta$ being cent
 
 \begin{enumerate}
 \item 
+Beta(a=1,b=1)
+\item 
 Beta(a=2,b=2)
 \item 
 Beta(a=3,b=3)
@@ -607,7 +620,7 @@ Beta(a=10,b=10)
 
 \begin{enumerate}
 \item
-If we don't have much prior information, we could use a=b=2; this gives us a uniform prior; we will call this a vague prior. 
+If we don't have much prior information, we could use a=b=1; this gives us a uniform prior; we will call this a vague prior. 
 \item
 If we have a lot of prior knowledge and/or a strong belief that $\theta$ has a particular value, we can use a larger a,b to reflect our greater certainty about the parameter. 
 \item
@@ -875,7 +888,7 @@ E[\theta\mid x] = m\times \frac{w1}{w1+w2} + \bar{x} \times \frac{w2}{w1+w2} \qu
 w_1 = v^{-1}, w_2=(\sigma^2/n)^{-1}
 \end{equation}
 
-So: the posterior mean is a \textbf{weighted mean} of the prior and likelihood.
+So: the posterior mean is a \textbf{weighted mean} of the prior mean and the sample mean.
 
 \end{frame}
 
@@ -927,7 +940,7 @@ Let's say there is a hormone measurement test that yields a numerical value that
 
 Compute posterior N(m*,v*).
 
-I'll leave this as Homework 0 (solution next week). Hint: see slide~\pageref{hw0hint}.
+I'll leave this as Problem 1 (solution is provided with the exercise). Hint: see slide~\pageref{hw0hint}.
 
 \end{frame}
 
@@ -984,7 +997,7 @@ y_i \sim Normal(\mu[i],\sigma^2) \quad i=1,\dots,463
 \end{equation}
 
 \begin{equation}
-\mu[i] \sim \beta_0 + \beta_1  x_i \quad \hbox{Note: predictor is centered}
+\mu[i] \leftarrow \beta_0 + \beta_1  x_i \quad \hbox{Note: predictor is centered}
 \end{equation}
 
 Define priors on the $\beta$ and on $\sigma$:
@@ -1011,9 +1024,7 @@ library(rjags)
 \begin{frame}[fragile]\frametitle{Better looking professors get better teaching evaluations}
 
 <<>>=
-cat("
-model
-   {
+cat("model{
     ## specify model for data:
     for(i in 1:463){ 
     y[i] ~ dnorm(mu[i],tau)
@@ -1037,7 +1048,7 @@ Some things to note in JAGS syntax:
 
 \begin{enumerate}
 \item The normal distribution is defined in terms of precision, not variance.
-\item $\sim$ can be read as ``is generated or modeled by''
+\item $\sim$ can be read as ``is generated by'',  or ``is modeled by''
 \item %\texttt{$<$-}
 \begin{verbatim}
 <-
@@ -1137,7 +1148,7 @@ hist(MCMCsamp[,3],main=expression(sigma),
 
 
 
-\begin{frame}[fragile]\frametitle{Homework 1: Rats' weights}
+\begin{frame}[fragile]\frametitle{Problem 2: Rats' weights}
 \framesubtitle{Source: Lunn et al 2012}
 
 Five measurements of a rat's weight, in grams, as a function of some x (say some nutrition-based variable). Note that here we will center the predictor in the model code. \label{ratseg}
@@ -1151,7 +1162,7 @@ data<-list(x=c(8,15,22,29,36),
 
 \end{frame}
 
-\begin{frame}[fragile]\frametitle{Homework 1: Rats' weights}
+\begin{frame}[fragile]\frametitle{Problem 2: Rats' weights}
 \framesubtitle{Source: Lunn et al 2012}
 
 Then we fit the linear model using \texttt{lm}, for comparison with the Bayesian model:
@@ -1164,7 +1175,7 @@ Fit this linear model using JAGS.
 
 \end{frame}
 
-\begin{frame}[fragile]\frametitle{Homework 2: Rats' weights (solution in next class)}
+\begin{frame}[fragile]\frametitle{Problem 3: Rats' weights (solution in next class)}
 
 \small
 Fit the following model in JAGS:
@@ -1299,10 +1310,12 @@ How to get the second term: let $u=1-\theta$. Then, $du/d\theta= -1$. Now, $y=(n
 
 Rearranging terms we get:
 
-$ \frac{x}{\theta} - \frac{n-x}{1-\theta} = 0 \Leftrightarrow  
+\begin{equation}
+ \frac{x}{\theta} - \frac{n-x}{1-\theta} = 0 \Leftrightarrow  
 \frac{x}{\theta} = \frac{n-x}{1-\theta} 
 \Leftrightarrow  
-\hat \theta = \frac{x}{n}$ 
+\hat \theta = \frac{x}{n}
+\end{equation}
 
 \end{frame}
 
@@ -1317,7 +1330,7 @@ The point of the MLE method is to find out the most likely value(s) of the param
 \begin{frame}[fragile]\frametitle{Multiple predictors}
 \framesubtitle{Source: Baayen's book}
 
-We fit log reading time to Trial id (centered), Native Language, and Sex. The categorical variables are centered as well. Note: This model is incorrect! We should have fit a linear mixed model.
+We fit log reading time to Trial id (centered), Native Language, and Sex. The categorical variables are centered as well. Note: This model is incorrect! We should have fit a linear mixed model, but we are going to fit a multiple regression using \texttt{lm} anyway.
 
 <<>>=
 lexdec<-read.table("data/lexdec.txt",header=TRUE)
@@ -1335,10 +1348,10 @@ contrasts(data$Sex)<-contr.sum(2)
 
 <<>>=
 lm_summary_lexdec<-summary(fm<-lm(RT~
-                                    scale(Trial,scale=F)+
+  scale(Trial,scale=F)+
   NativeLanguage+Sex,data))
 
-round(lm_summary_lexdec$coef,digits=2)
+round(lm_summary_lexdec$coef[,1:2],digits=2)
 @
 
 \end{frame}
@@ -1350,7 +1363,14 @@ Preparing the data for JAGS:
 <<>>=
 contrasts(data$NativeLanguage)
 contrasts(data$Sex)
+@
 
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Multiple predictors}
+
+
+<<>>=
 ## redo contrasts as vectors:
 eng<-ifelse(data$NativeLanguage=="English",1,-1)
 sex<-ifelse(data$Sex=="F",1,-1)
@@ -1439,15 +1459,8 @@ round(summary(lexdec.res)$quantiles[,c(1,3,5)],
 
 \begin{frame}[fragile]\frametitle{Multiple predictors}
 
-Here is the lm fit for comparison (I centered all predictors):
+As an exercise, compare the above model's results with the output of the lm function.
 
-<<>>=
-lm_summary_lexdec<-summary(
-  fm<-lm(RT~scale(Trial,scale=F)
-         +NativeLanguage+Sex,
-               lexdec))
-round(lm_summary_lexdec$coef,digits=2)[,1:2]
-@
 
 \textbf{Note: We should have fit a linear mixed model here}; I will return to this later.
 
