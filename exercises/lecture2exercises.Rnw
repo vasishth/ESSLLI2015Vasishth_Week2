@@ -1,0 +1,300 @@
+\documentclass{article} 
+\usepackage[natbibapa]{apacite} 
+\usepackage[american]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{csquotes}
+
+\usepackage{setspace}
+
+\usepackage[outdir=./]{epstopdf}
+
+
+\usepackage{amsmath,amssymb,amsfonts}
+
+\usepackage{url}   % this allows us to cite URLs in the text
+\usepackage{graphicx}   % allows for graphic to float when doing jou or doc style
+\usepackage{verbatim}   % allows us to use \begin{comment} environment
+\usepackage{caption}
+%\usepackage{lscape}
+\usepackage{pdflscape}
+
+\usepackage{fancyvrb}
+
+\usepackage{newfloat}
+\DeclareFloatingEnvironment[
+%    fileext=los,
+%    listname=List of Schemes,
+%    name=Listing,
+%    placement=!htbp,
+%    within=section,
+]{listing}
+
+\title{lecture 2 exercises (ESSLLI)}
+\author{Shravan Vasishth}
+
+%\affiliation{University of Potsdam, Potsdam, Germany and \\
+%School of Mathematics and Statistics, University of Sheffield, Sheffield, UK}
+
+
+\begin{document}
+
+\maketitle
+
+<<setup,include=FALSE,cache=FALSE>>=
+library(knitr)
+library(coda)
+
+# set global chunk options, put figures into folder
+options(replace.assign=TRUE,show.signif.stars=FALSE)
+opts_chunk$set(fig.path='figures/figure-', fig.align='center', fig.show='hold')
+options(replace.assign=TRUE,width=75)
+# opts_chunk$set(dev='postscript')
+opts_chunk$set(dev='pdf')
+options(digits = 2)
+library(rstan)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+set.seed(9991)
+
+@
+
+
+Solutions are given at the end of this document.
+
+\section*{Problem 1}
+
+Let's say there is a hormone measurement test that yields a numerical value that can be positive or negative. We know the following:
+
+\begin{itemize}
+\item The doctor's prior: 75\%  interval (``patient healthy'') is [-0.3,0.3].
+\item Data from patient: $x=0.2$, known $\sigma=0.15$.
+\end{itemize}
+
+Compute posterior N(m*,v*).
+
+\section*{Problem 2}
+
+We are given five measurements of a rat's weight, in grams, as a function of some x (say some nutrition-based variable). Note that here we will center the predictor in the model code. The goal is to understand how the amount of nutrition x affects the rats' weights.
+
+First we load/enter the data:
+
+<<>>=
+data<-list(x=c(8,15,22,29,36),
+           y=c(177,236,285,350,376))
+@
+
+Determine the coefficient estimates and sigma estimate using a JAGS model that corresponds to the linear model:
+
+<<>>=
+fm<-lm(y~x,data)
+@
+
+Also find out the 95\% credible intervals for each estimate:
+
+\section*{Problem 3}
+
+This uses the rats data from problem 2. 
+
+Fit the JAGS model:
+
+\begin{verbatim}
+model
+   {
+    ## specify model for data:
+    for(i in 1:5){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + beta1 * (x[i]-mean(x[]))
+    }
+    # priors:
+    beta0 ~ dunif(-500,500)
+    beta1 ~ dunif(-500,500)
+    tau <- 1/sigma2
+    sigma2 <-pow(sigma,2)
+    sigma ~ dunif(0,200)
+   }
+\end{verbatim}
+
+Here, we have centered the predictor so that the average value of x is now represented as 0.
+
+What has changed in the model compared to problem 2? Write down the estimates and their uncertainty intervals and compare with Problem 2's estimates.
+
+\section*{Problem 4}
+
+In the beetle data, 
+we fit uniform priors to the coefficients $\beta$:
+
+\begin{verbatim}
+    # priors:
+    beta0 ~ dunif(0,100)
+    beta1 ~ dunif(0,100)
+\end{verbatim}
+
+Fit the beetle data again, using suitable normal distribution priors for the coefficients beta0 and beta1.
+Does the posterior distribution depend on the prior?
+
+\newpage
+
+\section*{Solution to problem 1}
+
+
+\begin{enumerate}
+\item
+We know the prior mean m=0 but \textbf{we need to figure out prior sd s} from the 75\% credible interval given.
+\item 
+We know the sample mean $\bar{x}=0.2$ and the sample sd $\sigma$=0.15.
+\item
+We know how to find the posterior mean and sd given the above information.
+\end{enumerate}
+
+\textbf{Finding the prior sd s}:
+
+\begin{enumerate}
+\item
+Recall that  if a 75\% interval in a normal distribution is  [-0.3,0.3], 
+then $Prob(\theta>0.3)=0.125$. 
+\item
+We know that the z-score in N(0,1) which has area 0.125 to its right is 1.15 (\texttt{qnorm(.125,lower.tail=FALSE)}). 
+\item
+From the relation (slide~\pageref{hw0hint}) $z=1.15=\frac{0.3-0}{s}$, we can compute s given z: $0.3/1.15=0.2609$ is the standard deviation of the prior distribution. 
+\end{enumerate}
+
+Posterior variance (v*):
+
+\begin{equation}
+v^*=\frac{1}{\frac{1}{v}+ \frac{n}{\sigma^2}} 
+= \frac{1}{\frac{1}{0.2609^2}+ 
+\frac{1}{0.15^2}}=\Sexpr{round(1/((1/.2609^2) +(1/.15^2) ),digits=3)}
+\end{equation}
+
+Posterior mean (m*):
+
+\begin{equation}
+m^*= v^* \left( \frac{m}{v} + \frac{n\bar{x}}{\sigma^2} \right)= 0.017\times \left( \frac{0}{0.2609^2} + 
+\frac{1\times 0.2}{0.15^2} \right)
+= \Sexpr{round(0.017*(0.2/(0.15^2)),digits=3)}
+\end{equation}
+
+Optional plot:
+
+<<echo=FALSE,fig.width=5>>=
+x<-seq(-1,1,by=0.01)
+plot(x,dnorm(x,mean=0,sd=0.2609),type="l",ylim=c(0,3),ylab="density")
+lines(x,dnorm(x,mean=0.2,sd=0.15),lty=2)
+lines(x,dnorm(x,mean=0.151,sd=sqrt(0.017)),lty=1,col="red")
+legend(x=-1,y=2.5,lty=c(1,2,1),col=c("black","black","red"),
+       legend=c("prior","lik","post"))
+@
+
+Comment on this problem:
+Think about what happens to posterior variance as sample size n increases, for given v and $\sigma$:
+
+$v^*=\frac{1}{\frac{1}{v}+ \frac{1}{\sigma^2/n}}$
+
+
+<<fig.height=4>>=
+vpost<-function(v=0.2609^2,n=1,s=0.15^2){
+  return(1/((1/v)+n/s))
+}
+n<-seq(1,1000,by=1)
+plot(n,vpost(v=2600,n=n),type="l",ylab="posterior variance",xlab="sample size")
+@
+
+\section*{Solution to problem 2}
+
+Load data:
+<<>>=
+data<-list(x=c(8,15,22,29,36),
+           y=c(177,236,285,350,376))
+
+track.variables<-c("beta0","beta1",
+                   "sigma")
+library(rjags)
+
+cat("
+model
+   {
+    ## specify model for data:
+    for(i in 1:5){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + beta1 * (x[i])
+    }
+    # priors:
+    beta0 ~ dunif(-500,500)
+    beta1 ~ dunif(-500,500)
+    tau <- 1/sigma2
+    sigma2 <-pow(sigma,2)
+    sigma ~ dunif(0,200)
+   }",
+     file="ratsexample1.jag" )
+
+rats.mod <- jags.model( 
+  file = "ratsexample1.jag",
+                     data=data,
+                     n.chains = 2,
+                     n.adapt =2000, 
+                      quiet=T)
+
+rats.res <- coda.samples( rats.mod,
+                                 var = track.variables,
+                              n.iter = 10000)
+@
+
+<<>>=
+## mean:
+summary(rats.res)$statistics[,1:2]
+## lower, median, upper credible interval:
+summary(rats.res)$quantiles[,c(1,3,5)]
+@
+
+Results should match lm fit (check this).
+
+\section*{Solution to Problem 3}
+
+<<>>=
+cat("
+model
+   {
+    ## specify model for data:
+    for(i in 1:5){ 
+    y[i] ~ dnorm(mu[i],tau)
+    mu[i] <- beta0 + beta1 * (x[i]-mean(x[]))
+    }
+    # priors:
+    beta0 ~ dunif(-500,500)
+    beta1 ~ dunif(-500,500)
+    tau <- 1/sigma2
+    sigma <-pow(sigma2,1/2)
+    #sigma ~ dunif(0,200)
+    log(sigma2) <- 2* log.sigma
+    log.sigma ~ dunif(0,8)
+   }",
+     file="ratsexample2llogsigma.jag" )
+@
+
+<<>>=
+track.variables<-c("beta0","beta1","sigma")
+
+## define model:
+rat.mod <- jags.model( 
+  file = "ratsexample2llogsigma.jag",
+                     data=data,
+                     n.chains = 4,
+                     n.adapt =2000, 
+                     quiet=T)
+
+## sample from posterior:
+rat.res <- coda.samples(rat.mod,
+                          var = track.variables,
+                          n.iter = 2000,
+                          thin = 1 ) 
+
+summary(rat.res)$statistics[,1:2]
+@
+
+\section*{Solution to Problem 4}
+
+Try a normal distribution prior with mean 0 and increasing precision. For low precisions, not much should change, but for high precision we should see the prior dominating. 
+
+\end{document}
+
