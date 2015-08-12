@@ -1239,91 +1239,6 @@ summary(rat.res)$statistics[,1:2]
 
 \end{frame}
 
-\section{Likelihood}
-
-\begin{frame}[fragile]\frametitle{Review of the Likelihood Function}
-
-\textbf{Discrete case}: Suppose the observed sample values (binomially distributed) are $x_1, x_2,\dots, x_n$. The joint probability of getting them is
-
-\begin{equation}
-P(X_1=x_1,X_2=x_2,\dots,X_n=x_n) = f(X_1=x_1,X_2=x_2,\dots,X_n=x_n;\theta)  
-\end{equation} 
-
-\noindent
-i.e., the function $f$ is the value of the joint probability \textbf{distribution} of the random variables $X_1,\dots,X_n$ at $X_1=x_1,\dots,X_n=x_n$. Since the sample values have been observed and are fixed, $f(x_1,\dots,x_n;\theta)$ is a function of $\theta$. The function $f$ is called a \textbf{likelihood function}.
-
-\end{frame}
-
-\begin{frame}[fragile]\frametitle{Review of the Likelihood Function}
-
-\textbf{Continuous case}
-
-Here, $f$ is the joint probability \textbf{density}, the rest is the same as above.
-
-If $x_1, x_2,\dots, x_n$ are the values of a random sample from a population with parameter $\theta$, the \textbf{likelihood function} of the sample is given by 
-
-\begin{equation}
-L(\theta) = f(x_1, x_2,\dots, x_n; \theta)	
-\end{equation}
-
-\noindent
-for values of $\theta$ within a given domain. Here, $f(X_1=x_1,X_2=x_2,\dots,X_n=x_n;\theta)$ is the joint probability distribution or density of the random variables $X_1,\dots,X_n$ at $X_1=x_1,\dots,X_n=x_n$.
-
-\end{frame}
-
-\begin{frame}[fragile]\frametitle{Review of the Likelihood Function}
-
-So, the method of maximum likelihood consists of maximizing the likelihood function with respect to $\theta$. The value of $\theta$ that maximizes the likelihood function is the \textbf{MLE} (maximum likelihood estimate) of $\theta$.
-
-\end{frame}
-
-\begin{frame}\frametitle{Finding the MLE by hand}
-
-The likelihood function in the binomial case:
-
-\begin{equation}
-L(\theta) = {n \choose x} \theta^x (1-\theta)^{n-x}  
-\end{equation}
-
-Log likelihood:
-
-\begin{equation}
-\ell (\theta) = \log {n \choose x} + x \log \theta + (n-x)	\log (1-\theta)
-\end{equation}
-
-\end{frame}
-
-\begin{frame}\frametitle{Finding the MLE by hand}
-
-Differentiating and equating to zero to get the maximum:
-
-\begin{equation}
-\ell ' (\theta) = \frac{x}{\theta} - \frac{n-x}{1-\theta} = 0	
-\end{equation}
-
-
-How to get the second term: let $u=1-\theta$. Then, $du/d\theta= -1$. Now, $y=(n-x)\log(1-\theta)$ can be rewritten in terms of u: $y=(n-x)\log(u)$. So, $dy/du= \frac{n-x}{u}$. Now $dy/d\theta=dy/du \times du/d\theta= \frac{n-x}{u}\times (-1)=-\frac{n-x}{1-\theta}$.
-
-\end{frame}
-
-\begin{frame}\frametitle{Finding the MLE by hand}
-
-Rearranging terms we get:
-
-\begin{equation}
- \frac{x}{\theta} - \frac{n-x}{1-\theta} = 0 \Leftrightarrow  
-\frac{x}{\theta} = \frac{n-x}{1-\theta} 
-\Leftrightarrow  
-\hat \theta = \frac{x}{n}
-\end{equation}
-
-\end{frame}
-
-\begin{frame}\frametitle{The Likelihood Function}
-
-The point of the MLE method is to find out the most likely value(s) of the parameter(s) that generated the data (assuming some probability model for the data).
-
-\end{frame}
 
 \section{Example 4: Multiple regression}
 
@@ -1767,7 +1682,7 @@ glm.mod <- jags.model(
 <<>>=
 glm.res <- coda.samples( glm.mod,
                           var = track.variables,
-                              n.iter = 2000) 
+                              n.iter = 4000) 
 @
 
 \end{frame}
