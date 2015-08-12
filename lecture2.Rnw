@@ -1867,11 +1867,11 @@ rats.mod <- jags.model(
   file = "JAGSmodels/ratsexample2pred.jag",
                      data=data,
                      n.chains = 2,
-                      n.adapt =2000, quiet=T)
+                      n.adapt =5000, quiet=T)
 
 rats.res <- coda.samples( rats.mod,
                           var = track.variables,
-                              n.iter = 2000,
+                              n.iter = 10000,
                                 thin = 1) 
 @
 
