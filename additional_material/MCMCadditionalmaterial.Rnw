@@ -1,0 +1,733 @@
+\documentclass{beamer}
+
+\usepackage{comment}
+%% for class version:
+\excludecomment{versionclass}
+%% for solutions version:
+%\includecomment{versionclass}
+
+\usepackage{mathtools}
+\makeatletter
+\newcommand{\explain}[2]{\underset{\mathclap{\overset{\uparrow}{#2}}}{#1}}
+\newcommand{\explainup}[2]{\overset{\mathclap{\underset{\downarrow}{#2}}}{#1}}
+\makeatother
+
+
+\usetheme{Goettingen}
+\usepackage[english]{babel}
+\usepackage[latin1]{inputenc}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{epstopdf}
+
+\usepackage{mathptmx}
+\usepackage{amsthm}
+
+\usepackage{esint}
+
+
+\setbeamercovered{transparent}
+
+
+\title{Markov Chain Monte Carlos}
+\author{S.\ Vasishth}
+\institute{Potsdam}
+
+\setbeamerfont{page number in head/foot}{size=\large}
+\setbeamertemplate{footline}[frame number]
+
+
+\begin{document}
+
+\SweaveOpts{concordance=TRUE}
+
+
+
+
+\frame{\titlepage}
+
+\section{Introduction}
+
+\begin{frame}\frametitle{The goal}
+
+Our main goal is always to estimate properties of posterior probability distributions.
+
+Suppose we have a random variable $X\sim f(x)$. What is its mean? We know how to calculate the mean analytically if f(x) is ``solvable''.
+
+\begin{equation}
+\mu = \int_{\infty}^{\infty} x f(x)\, dx
+\end{equation}
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Example}
+\framesubtitle{The expectation of the standard normal random variable}
+
+\small
+\begin{equation*}
+E[Z] = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^\infty x e^{-x^2/2} \, dx
+\end{equation*}
+
+Let $u = -x^2/2$.
+
+Then, $du/dx = -2x/2=-x$. I.e., $du= -x \, dx$ or $-du=x \, dx$.
+
+We can rewrite the integral as:
+
+\begin{equation*}
+E[Z]  = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^\infty e^{u} x \, dx
+\end{equation*}
+
+Replacing $x\, dx$ with $-du$ we get:
+
+\begin{equation*}
+-\frac{1}{\sqrt{2\pi}} \int_{-\infty}^\infty e^{u} \, du  
+\end{equation*}
+
+which yields:
+
+\begin{equation*}
+-\frac{1}{\sqrt{2\pi}} [ e^{u} ]_{-\infty}^{\infty}
+\end{equation*}
+\end{frame}
+
+\begin{frame}\frametitle{Example}
+\framesubtitle{The expectation of the standard normal random variable}
+
+Replacing $u$ with $-x^2/2$ we get:
+
+\begin{equation*}
+-\frac{1}{\sqrt{2\pi}} [ e^{-x^2/2} ]_{-\infty}^{\infty} = 0
+\end{equation*}
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Using Monte Carlo Integration}
+
+Suppose that $f(x)$ is not solvable, but suppose that we can get samples from $X$: $x_1,\dots, x_n$.
+
+We can now estimate $\mu$:
+
+\begin{equation}
+\hat{\mu} = \frac{1}{n} \sum x_i
+\end{equation}
+
+This estimate is unbiased:
+
+$E(\hat{\mu}) = \frac{1}{n} \sum (E(X_i)) = \frac{1}{n} n E(X) = \mu$
+
+For large $n$, $Var(\hat\mu) = \frac{Var(X)}{n}$. I.e., variance tends to zero as $n\rightarrow \infty$.
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Example}
+Expectation of standard normal random variable using sampling
+
+<<>>=
+x<-rnorm(1000,mean=0,sd=1)
+mean(x) ## cf. analytical value 0
+@
+
+We can also compute quantities like $P(X<1.96)$ by sampling:
+
+<<>>=
+counts<-table(x<1.96)[2]
+## pretty close to the theoretical value:
+counts/length(x)
+## theoretical value:
+pnorm(1.96)
+@
+
+\end{frame}
+
+
+\begin{frame}\frametitle{The posterior distribution}
+
+In the bayesian setting, we often cannot derive the posterior distribution. \textit{But we can always write it up to proportionality}:
+
+\begin{equation}
+f(\theta\mid x) \propto f(\theta) f(x\mid \theta)
+\end{equation}
+
+We often can't figure out $\int f(\theta) f(x\mid \theta)\, d\theta$. \textbf{But maybe we can make it disappear}.
+
+
+
+\end{frame}
+
+
+\begin{frame}\frametitle{The goal again}
+
+The goal is to produce samples $\theta_1,\theta_2,\dots$ from $f(\theta\mid x)$. 
+
+The MCMC approach will produce a sample even if we know $f(\theta\mid x)$ only up to proportionality.
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Markov Chain sampling}
+
+We have been doing non-Markov chain sampling in the introductory course:
+
+<<>>=
+indep.samp<-rnorm(500,mean=0,sd=1)
+head(indep.samp,n=3)
+@
+
+The vector of values sampled here are statistically independent. 
+
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Markov Chain sampling}
+
+Independent samples:
+
+<<label=indepsamp,fig=T>>=
+plot(1:500,indep.samp,type="l")
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Markov Chain sampling}
+
+If the current value influences the next one, we have a Markov chain.
+Here is a Markov chain: the i-th draw is dependent on the i-1 th draw:
+
+<<markovchainexample>>=
+nsim<-500
+x<-rep(NA,nsim)
+y<-rep(NA,nsim)
+x[1]<-rnorm(1) ## initialize x
+for(i in 2:nsim){
+## draw i-th value based on i-1-th value:  
+y[i]<-rnorm(1,mean=x[i-1],sd=1)
+x[i]<-y[i]
+}
+plot(1:nsim,y,type="l")
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Markov Chain sampling}
+
+<<fig=T,echo=F>>=
+<<markovchainexample>>
+@
+\end{frame}
+
+
+\begin{frame}\frametitle{Formal definition of Markov Chains}
+
+Suppose we are given a sequence of random variables $X_1,X_2,\dots$ with a \textbf{transition kernel} which tells us the probability distribution of $X_{t+1}$ given $X_t$:
+
+\bigskip
+Transition kernel: $P(X_{t+1}\mid X_t)$.
+\bigskip
+
+In a Markov Chain: $P(X_{t+1}\mid X_1,\dots,X_t) = P(X_{t+1}\mid X_t)$.
+
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Stationarity}
+
+Suppose we have $X_1$. Let $P^t(X_t\mid X_1)$ be the distribution of $X_t$. 
+
+$P^t (X_t\mid X_1)$ will converge to a \textbf{stationary distribution} $\phi(X)$ if the Markov Chain has certain properties: 
+if it is ergodic, i.e., 
+\begin{itemize}
+\item
+irreducible (can eventually visit every possible state)
+\item 
+aperiodic (some cycle of values repeats only once), 
+\item
+positive
+recurrent (will eventually return to any given start state with prob.\ 1).
+\end{itemize}
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]\frametitle{Convergence in discrete Markov Chains}
+
+Recall that a Markov Chain defines a probabilistic move from one state to the next. 
+
+Suppose we have 6 states; a \textbf{transition matrix} can define the probabilities:
+
+<<>>=
+## Set up transition matrix:
+T<-matrix(rep(0,36),nrow=6)
+diag(T)<-0.5
+offdiags<-c(rep(0.25,4),0.5)
+for(i in 2:6){
+T[i,i-1]<-offdiags[i-1]
+}
+offdiags2<-c(0.5,rep(0.25,4))
+for(i in 1:5){
+T[i,i+1]<-offdiags2[i]
+}
+@
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+<<>>=
+T
+@
+
+Note that the rows sum to 1, i.e., the probability mass is distributed over all possible transitions from any one location:
+
+<<>>=
+rowSums(T)
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+We can represent a current state as a probability vector: e.g., in state one, the transition probabilities for possible moves are:
+
+<<>>=
+T[1,]
+@
+
+We can also simulate a non-determinsitic random walk based on a state like T[1,]:
+
+<<>>=
+sample(1:6,size=1,prob=T[1,])
+sample(1:6,size=1,prob=T[1,])
+sample(1:6,size=1,prob=T[1,])
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+A non-deterministic random walk:
+
+<<randomwalk>>=
+nsim<-500
+s<-rep(0,nsim)
+## initialize:
+s[1]<-3
+for(i in 2:nsim){
+  s[i]<-sample(1:6,size=1,prob=T[s[i-1],])
+}
+
+plot(1:nsim,s,type="l",main="States visited")
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+A non-deterministic random walk:
+<<fig=T,echo=F>>=
+<<randomwalk>>
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+This Markov chain converges to a particular distribution of probabilities of visiting states 1 to 6. We can see the convergence happen by examining the proportions of visits to each state after blocks of steps that increase by 500 steps.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+<<>>=
+nsim<-50000
+s<-rep(0,nsim)
+## initialize:
+s[1]<-3
+for(i in 2:nsim){
+  s[i]<-sample(1:6,size=1,prob=T[s[i-1],])
+}
+
+blocks<-seq(500,50000,by=500)
+n<-length(blocks)
+## store transition probs over increasing blocks:
+store.probs<-matrix(rep(rep(0,6),n),ncol=6)
+## compute relative frequencies over increasing blocks:
+for(i in 1:n){
+  store.probs[i,]<-table(s[1:blocks[i]])/blocks[i]
+}
+@
+
+\end{frame}
+
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+<<convergence>>=
+op <- par(mfrow=c(3,2))
+for(i in 1:6){
+plot(1:n,store.probs[,i],type="l",lty=1,xlab="block",
+     ylab="probability",main=paste("State ",i,sep=""))
+}
+@
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+<<fig=T,echo=F>>=
+<<convergence>>
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+Note that each of the rows of the \texttt{store.probs} matrix is a probability mass function, which defines the probability distribution for the 6 states:
+
+<<>>=
+store.probs[1,]
+@
+
+This distribution is settling down to a particular set of values; that's what we mean by convergence. This particular set of values is:
+
+<<>>=
+(w<-store.probs[n,])
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Convergence}
+
+$w$ is called a \textbf{stationary} distribution. 
+If $wT=w$, then $w$ is the stationary distribution of the Markov chain. 
+
+<<>>=
+round(w%*%T,digits=2)
+round(w,digits=2)
+@
+
+This discrete example gives us an intuition for what will happen in continuous distributions: we will devise a Markov chain such that the chain will converge to the distribution we are interested in sampling from.
+
+\end{frame}
+
+\begin{frame}\frametitle{Convergence}
+
+If by time T the Markov Chain reaches its stationary distribution (reaches equilibrium) then $X_{T+1},\dots, 
+X_{T+n}$ will be samples from the density function $\phi(X)$.
+
+Once we are at equilibirum, we can use $\frac{1}{n}\sum X_{T+i}$ to estimate $E(X)$.
+
+
+
+\end{frame}
+
+
+\begin{frame}\frametitle{Independence}
+
+Note that $X_{T+i}$ and $X_{T+i+1}$ will still not be independent. But the samples will be from $\phi(X)$.
+
+As $n\rightarrow \infty$, the estimator will converge to $E(X)$.
+
+\end{frame}
+
+\begin{frame}\frametitle{A key result}
+
+For any pdf $f(\theta\mid x)$, it is possible to construct a Markov Chain $\theta_1,\theta_2,\dots$ whose stationary distribution is $\phi(X)=f(\theta\mid x)$.  
+
+\end{frame}
+
+\begin{frame}\frametitle{The method: Metropolis-Hastings}
+
+
+\begin{enumerate}
+\item
+Let $f(X)$ be the target density. 
+\item
+Let $X_t$ be the value of the Markov Chain at time t.
+\item
+We need to define the transition kernel $P(X_{t+1}\mid X_t)$ which states the probability with which the different $X_{t+1}$ values would be generated. 
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}\frametitle{The method: Metropolis-Hastings}
+
+We have an initial value $X_t$.
+
+\begin{enumerate}
+\item
+Define a proposal density $q(Y\mid X_t)$. Example: $N(mean=X_t,sd=1)$.
+\item 
+Generate a candidate point Y from $q(Y\mid X_t)$.
+\item
+Set
+\begin{enumerate}
+\item
+$X_{t+1}\leftarrow Y$ with probability $\alpha(X_t,Y)$,
+\item
+$X_{t+1}\leftarrow X_t$ with probability $1-\alpha(X_t,Y)$
+\end{enumerate}
+where $\alpha(X_t,Y)=min \{ 1, \frac{f(Y)}{f(X_t)} \frac{q(X_t\mid Y)}{q(Y\mid X_t)} \}$.
+
+To make the above decision, sample $U \sim Unif(0,1)$.
+\begin{enumerate}
+\item 
+If $U \leq \alpha(X_t,Y)$, set $X_{t+1}\leftarrow Y$.
+\item 
+If $U > \alpha(X_t,Y)$, set $X_{t+1}\leftarrow X_t$.
+\end{enumerate}
+\end{enumerate}
+
+\end{frame}
+
+\section{MCMC ``by hand''}
+
+\begin{frame}\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{Cauchy random variables}
+
+\begin{equation}
+f(x) = \frac{k}{1+\theta^2} \quad \hbox{ where } k = \pi^{-1} \hbox{ (k will cancel out)}
+\end{equation}
+
+Proposal density $q(\theta\mid \theta_t)$, let this be $N(\theta_t,1)$, where $\theta_t$ is the current value of $\theta$.
+
+It follows that
+
+\begin{equation}
+q(\theta\mid \theta_t) = \frac{1}{\sqrt{2\pi}} \exp {-\frac{1}{2} \frac{(\theta-\theta_t)^2}{1}}
+\end{equation}
+
+Note that $q(\theta\mid \theta_t)=q(\theta_t\mid \theta)$. This means that 
+
+\begin{equation}
+\alpha(X_t,Y)=min \{ 1, \frac{f(Y)}{f(X_t)} \frac{q(X_t\mid Y)}{q(Y\mid X_t)} \} =min \{ 1, \frac{f(Y)}{f(X_t)} \}
+\end{equation}
+
+\end{frame}
+
+
+
+\begin{frame}\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{Cauchy random variables}
+
+It follows that 
+
+\begin{equation}
+\begin{split}
+\alpha (\theta_t,\theta) =& min \{ 1, \frac{f(\theta)}{f(\theta_t)} \}\\
+=& min \{ 1, \frac{1+\theta_t^2}{1+\theta^2} \}
+\end{split}
+\end{equation}
+
+In other words:
+
+\begin{equation}
+\alpha(\theta_t,\theta)=
+\begin{cases}
+1                                 & \hbox{ if } \mid \theta_t\mid  > \mid \theta\mid ,\\
+\frac{1+\theta_t^2}{1+\theta^2} , & \hbox{ otherwise}\\
+\end{cases}
+\end{equation}
+
+
+\end{frame}
+
+
+
+
+\begin{frame}[fragile]\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{Cauchy random variables}
+
+As a starting value, choose the mode of a cauchy: $\theta_1=0$.
+
+\begin{verbatim}
+Markov Chain so far: <0>
+\end{verbatim}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{Cauchy random variables}
+
+Generate candidate point Y from $q(\theta\mid theta_1=0)$.
+
+<<>>=
+## initial value:
+theta.t<-0
+## always give the same result:
+set.seed(43210)
+## generate candidate:
+(Y<-rnorm(1,mean=theta.t,sd=1))
+@
+
+Since $\mid Y \mid > \mid \theta_1 \mid$, we have
+
+\begin{equation}
+\begin{split}
+\alpha(\theta_t,Y)=& \frac{1+\theta_t^2}{1+Y^2}\\
+=& \frac{1+0}{1+(\Sexpr{round(Y,digits=5)})^2}\\
+=& \Sexpr{round(1/(1+Y^2),digits=5)}
+\end{split}
+\end{equation}
+
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{Cauchy random variables}
+
+Next, generate a uniform random variable:
+
+<<>>=
+(U <- runif(1,0,1))
+@
+
+This step allows us to decide whether to probabilistically accept or reject $Y$:
+
+\begin{enumerate}
+\item[(a)] 
+If $U \leq \alpha(X_t,Y)$, set $X_{t+1}\leftarrow Y$.
+\item[(b)] 
+If $U > \alpha(X_t,Y)$, set $X_{t+1}\leftarrow X_t$.
+\end{enumerate}
+
+Here, the first condition holds, so we set $X_{t+1}$ to $Y$.  
+
+\begin{verbatim}
+Markov chain: <0,-0.43117>
+\end{verbatim}
+
+Now start over, with $\theta_t=-0.43117$ instead of $\theta_t=0$.
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{In-class Exercise}
+
+\begin{enumerate}
+\item 
+Implement the Metropolis-Hastings algorithm for the cauchy case illustrated above. Run 5,000 simulations and assess convergence visually (``fat hairy caterpillars'').
+\item 
+Once you have the algorithm working properly, run three chains, each with three different initial values (-100,0,100), and plot them together in one figure. 
+\item Discard the first 2000 runs (burn-in or warm-up) and 
+compute $P(0<\theta<1)$ from the sampled chains.
+
+\end{enumerate}
+<<echo=F>>=
+## solution:
+nsteps<-5000
+chain<-rep(NA,nsteps)
+init<-0
+generate.candidate<-function(theta.t){
+  rnorm(1,mean=theta.t,sd=1)
+}
+alpha<-function(theta.t,Y){
+  min(1,(1+theta.t^2)/(1+Y^2))
+}
+
+theta.t<-init
+chain[1]<-theta.t
+
+for(i in 2:nsteps){
+  Y<-generate.candidate(theta.t)
+  prob<-alpha(theta.t,Y)
+  U <- runif(1,0,1)
+  if(U <= prob){
+    theta.t <- Y
+  } else {
+    if(U > prob){
+    theta.t<-theta.t
+  }  
+  }
+  chain[i]<-theta.t
+}
+@
+
+<<eval=F,include=F,echo=F>>=
+## probability of 0<theta<1:
+counts<-table(0<chain & chain<1)
+counts[2]/sum(counts)
+## theoretical value:
+pcauchy(1)-pcauchy(0)
+@
+
+<<echo=F>>=
+## multiple chain version:
+nchains<-3
+nsteps<-5000
+chains<-matrix(rep(NA,nchains*nsteps),ncol=nsteps)
+init.vector<-c(-100,0,100)
+generate.candidate<-function(theta.t){
+  rnorm(1,mean=theta.t,sd=1)
+}
+alpha<-function(theta.t,Y){
+  min(1,(1+theta.t^2)/(1+Y^2))
+}
+
+
+for(j in 1:nchains){
+  theta.t<-init.vector[j]
+  chains[j,1]<-theta.t
+for(i in 2:nsteps){
+  Y<-generate.candidate(theta.t)
+  prob<-alpha(theta.t,Y)
+  U <- runif(1,0,1)
+  if(U <= prob){
+    theta.t <- Y
+  } else {
+    if(U > prob){
+    theta.t<-theta.t
+  }  
+  }
+  chains[j,i]<-theta.t
+}
+}
+@
+<<eval=F,include=F,echo=F>>=
+## probability of 0<theta<1:
+burnedin.chains<-chains[,2001:5000]
+counts<-table(0<burnedin.chains[1:3,] & burnedin.chains[1:3,]<1)
+counts[2]/sum(counts)
+## theoretical value:
+pcauchy(1)-pcauchy(0)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{Exercise}
+
+<<fig=T>>=
+plot(1:nsteps,chain,type="l")
+@
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Implementing Metropolis-Hastings}
+\framesubtitle{Exercise}
+
+<<fig=T>>=
+plot(1:nsteps,chains[1,],type="l",ylim=c(-100,100))
+lines(1:nsteps,chains[2,],col="red")
+lines(1:nsteps,chains[3,],col="orange")
+@
+
+\end{frame}
+
+\end{document}
