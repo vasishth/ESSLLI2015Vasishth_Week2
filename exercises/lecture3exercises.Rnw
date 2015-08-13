@@ -1,0 +1,175 @@
+\documentclass{article} 
+\usepackage[natbibapa]{apacite} 
+\usepackage[american]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{csquotes}
+
+\usepackage{setspace}
+
+\usepackage[outdir=./]{epstopdf}
+
+
+\usepackage{amsmath,amssymb,amsfonts}
+
+\usepackage{url}   % this allows us to cite URLs in the text
+\usepackage{graphicx}   % allows for graphic to float when doing jou or doc style
+\usepackage{verbatim}   % allows us to use \begin{comment} environment
+\usepackage{caption}
+%\usepackage{lscape}
+\usepackage{pdflscape}
+
+\usepackage{fancyvrb}
+
+\usepackage{newfloat}
+\DeclareFloatingEnvironment[
+%    fileext=los,
+%    listname=List of Schemes,
+%    name=Listing,
+%    placement=!htbp,
+%    within=section,
+]{listing}
+
+\title{lecture 3 exercises (ESSLLI)}
+\author{Shravan Vasishth}
+
+%\affiliation{University of Potsdam, Potsdam, Germany and \\
+%School of Mathematics and Statistics, University of Sheffield, Sheffield, UK}
+
+
+\begin{document}
+
+\maketitle
+
+<<setup,include=FALSE,cache=FALSE>>=
+library(knitr)
+library(coda)
+
+# set global chunk options, put figures into folder
+options(replace.assign=TRUE,show.signif.stars=FALSE)
+opts_chunk$set(fig.path='figures/figure-', fig.align='center', fig.show='hold')
+options(replace.assign=TRUE,width=75)
+# opts_chunk$set(dev='postscript')
+opts_chunk$set(dev='pdf')
+options(digits = 2)
+library(rstan)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+set.seed(9991)
+
+@
+
+
+%Solutions are given at the end of this document.
+
+\section*{Problem 5 (Conjugacy)}
+
+The Gamma distribution is defined in terms of the parameters a, b: Ga(a,b). The probability density function is:
+
+\begin{equation}
+Ga(a,b)=\frac{b^a \lambda^{a-1} \exp\{-b\lambda\}}{\Gamma(a)}
+\end{equation}
+
+We have data $x_1,\dots, x_n$, with sample size $n$ that is exponentially distributed. The exponential likelihood function is: 
+
+\begin{equation}
+f(x_1,\dots,x_n; \lambda)=\lambda^n \exp \{-\lambda \sum_{i=1}^n x_i \}
+\end{equation}
+
+It turns out that if we assume a Ga(a,b) prior distribution and the above likelihood, the posterior distribution is a Gamma distribution. Find the parameters $a'$ and $b'$ of the posterior distribution.
+
+\section*{Problem 6 (GLMs)}
+
+This problem is based on the lecture 2 material.
+The Poisson distribution belongs to the exponential family. 
+
+\begin{equation}
+Y\sim Po(\exp(\mu)) \quad f(y) = \frac{\mu^y \exp(-\mu)}{y!}
+\end{equation}
+
+Write the likelihood function in the standard exponential form (as shown in the slides for the normal and binomial distributions). 
+
+
+
+\section*{Problem 7 (MCMC sampling exercise)}
+
+Suppose we have 10 successes from a sample size of 100, assuming a binomial process. Instead of a beta prior on $\theta$, we could could use a non-conjugate prior on a transformation of $\theta$: $logit(\theta)\sim N(\mu,\omega^2)$.
+Let $\omega^2=2.71$. Figuring out the posterior distribution of $\theta$ is not possible analytically; but MCMC methods allow us to sample from the posterior.
+
+<<>>=
+## the data:
+data<-list(y=10,n=100)
+
+cat("
+model
+   {
+    ## likelihood
+    y ~ dbin(theta,n)
+    ## prior
+    logit(theta) <- logit.theta
+    ## precision 0.368 = 1/2.71
+    logit.theta ~ dnorm(0,0.368)
+   }",
+     file="mcmcexample1.jag" )
+
+
+track.variables<-c("theta")
+library(rjags)
+
+mcmceg.mod <- jags.model( 
+  file = "mcmcexample1.jag",
+                     data=data,
+                     n.chains = 1,
+                      n.adapt =2000 , quiet=T)
+
+mcmceg.res <- coda.samples( mcmceg.mod,
+                            var = track.variables,
+                            n.iter = 10000,
+                            thin = 20 ) 
+
+summary(mcmceg.res)
+@
+
+<<fig.width=6>>=
+densityplot(mcmceg.res)
+@
+
+Assignment: Modify the above code so that (a) the prior for  $\theta$ is $Unif(0,1)$, and compute the posterior predictive distribution of y (call it y.pred) for 100 future observation. Does the posterior distribution of $\theta$ change? Are the predicted values reasonable?
+
+
+\newpage
+\section*{Solution to problem 5}
+
+I'll do this later (no time!).
+
+\section*{Solution to problem 6}
+
+We are given that
+
+\begin{equation}
+Y\sim Po(\exp(\mu)) \quad f(y) = \frac{\mu^y \exp(-\mu)}{y!}
+\end{equation}
+
+
+\begin{equation}
+f(y) =  \exp\left[\log \frac{\mu^y \exp(-\mu)}{y!} \right]
+\end{equation}
+
+Rewrite this as:$\exp\left[ y log \mu - \mu - \log y! \right]$.
+If we set $\theta=\log\mu$ then $\mu=\exp(\theta)$. Therefore, 
+
+\begin{equation}
+\exp\left[ y \log \mu - \mu - \log y! \right] = \exp \left[(y \theta) - \exp(\theta) + \log y! \right]
+\end{equation}
+
+Let $b(\theta)= \exp(\theta)$, and $c(y,\phi)=\log y!$. 
+
+This gives us $\exp\left[\frac{y\theta-b(\theta)}{\phi/w} + c(y,\phi)\right] $.
+
+
+\section*{Solution to problem 7}
+
+I'll do this later (no time!).
+
+\end{document}
+
